@@ -1,0 +1,28 @@
+{
+  "name": "reforma-plus-roi",
+  "private": true,
+  "version": "2.0.0",
+  "description": "ReformaPlus ROI - PWA Local-First com Supabase Backend para Gestão de Reforma e Flip Imobiliário",
+  "author": "ReformaPlus ROI",
+  "license": "MIT",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "serve": "npx --yes serve -l 8080 .",
+    "lint": "echo \"Nenhum lint configurado (HTML/CSS/JS vanilla)\"",
+    "build": "echo \"Projeto estático - nenhuma etapa de build necessaria. Output = diretorio raiz.\"",
+    "supabase:link": "supabase link --project-ref $PROJECT_REF",
+    "supabase:db:push": "supabase db push",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:gen:types": "supabase gen types typescript --project-id $PROJECT_REF --schema public > supabase/types.ts",
+    "vercel:dev": "npx --yes vercel dev --listen 3000",
+    "vercel:deploy": "npx --yes vercel --prod"
+  },
+  "devDependencies": {
+    "supabase": "^1.200.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

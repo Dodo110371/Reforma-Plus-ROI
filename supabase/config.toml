@@ -1,0 +1,47 @@
+# ============================================================
+# Configuração Padrão do Supabase CLI (supabase start / link / db push)
+# Documentação: https://supabase.com/docs/reference/cli/config
+# ============================================================
+
+# Porta do Supabase local (ao rodar `supabase start` - opcional DevX)
+project_id = "reformaplus-local"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+port = 54321
+site_url = "http://localhost:8080"
+additional_redirect_urls = ["https://localhost:8080", "http://localhost:3000", "https://vercel.app"]
+
+  [auth.email]
+  enable_signup = true
+  double_confirm_changes = true
+  enable_confirmations = false
+
+  [auth.jwt]
+  exp = 3600
+
+# Storage local
+[storage]
+enabled = true
+port = 54321
+file_size_limit = "2621440"
+
+# Edge functions locais
+[functions.edge_runtime]
+enabled = true

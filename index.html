@@ -1,0 +1,1394 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ReformaPlus ROI - Gestão de Reforma & Flip Imobiliário</title>
+
+  <!-- PWA Config & Meta -->
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#10b981">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ReformaPlus">
+  <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
+  <link rel="icon" type="image/png" href="./assets/icons/icon-192.png">
+
+  <!-- Meta SEO -->
+  <meta name="description"
+    content="Aplicativo PWA personalizado para gestão de custos de reforma, controle de materiais, serviços e cálculo de ROI de imóveis para revenda.">
+
+  <!-- Google Fonts & Phosphor Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap"
+    rel="stylesheet">
+
+  <!-- App Stylesheet -->
+  <link rel="stylesheet" href="./assets/css/style.css">
+
+  <!-- ============================================================
+       SUPABASE CONFIG - PREENCHA SEU PROJETO AQUI
+       Valores de exemplo (vazios = app roda 100% local-first).
+       Para ativar o backend CLOUD, substitua os 3 valores abaixo
+       ou crie variáveis no Vercel com os mesmos nomes.
+       ============================================================ -->
+  <meta name="VITE_LOCAL_ONLY" content="">
+  <meta name="VITE_SUPABASE_URL" content="">
+  <meta name="VITE_SUPABASE_ANON_KEY" content="">
+  <meta name="VITE_SUPABASE_BUCKET_RECEIPTS" content="receipts">
+
+  <!-- Supabase JS SDK CDN (carregado antes de storage/app) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
+</head>
+
+<body data-theme="dark">
+
+  <!-- Header Superior -->
+  <header class="app-header">
+    <div class="brand-container" style="cursor:pointer;" onclick="AppController.goHome()" title="Voltar para o início">
+      <div class="brand-logo">
+        <img src="./assets/icons/icon-192.png" alt="Logo ReformaPlus">
+      </div>
+      <div>
+        <h1 class="brand-title">ReformaPlus ROI</h1>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <span class="brand-tagline">Gestão de Reforma & Flip Imobiliário</span>
+          <span id="headerSessionBadge" class="badge badge-pendente" style="font-size: 0.7rem; margin-top: 2px;">🔒
+            Visitante</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <button id="btnInstallPWA" class="btn btn-gold btn-sm" style="display: none;">
+        📲 Instalar App
+      </button>
+      <button id="btnAuthToggle" class="btn btn-outline btn-sm no-print" title="Acesso Administrador">
+        🔑 Entrar
+      </button>
+      <button id="btnExportCSV" class="btn btn-outline btn-sm desktop-only no-print" title="Exportar CSV">
+        📊 Exportar CSV
+      </button>
+      <button id="btnPrintReport" class="btn btn-outline btn-sm desktop-only no-print" title="Imprimir / PDF">
+        🖨️ PDF
+      </button>
+      <button id="themeToggle" class="btn btn-icon btn-sm no-print" title="Alternar Tema">
+        🌙
+      </button>
+      <button id="btnMobileMenu" class="btn btn-icon btn-sm mobile-menu-btn no-print" title="Abrir Menu">
+        ☰
+      </button>
+    </div>
+  </header>
+
+  <!-- Gaveta Lateral de Navegação (Mobile Slide Drawer) -->
+  <div id="drawerBackdrop" class="drawer-backdrop no-print">
+    <div class="drawer-panel">
+      <div class="drawer-header">
+        <div class="brand-container">
+          <div class="brand-logo drawer-logo">
+            <img src="./assets/icons/icon-192.png" alt="Logo RP ROI">
+          </div>
+          <div class="drawer-brand-text">
+            <h3>ReformaPlus</h3>
+            <span class="drawer-subtitle">Gestão de Obras & ROI</span>
+            <span id="drawerSessionBadge" class="badge drawer-session-badge badge-pendente">🔒 Visitante</span>
+          </div>
+        </div>
+        <button id="btnCloseDrawer" class="drawer-close-btn" title="Fechar Menu" aria-label="Fechar menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="drawer-body">
+        <div class="drawer-section-label">
+          <span>Navegação</span>
+        </div>
+        <nav class="drawer-nav">
+          <button class="drawer-nav-item active" data-tab="home">
+            <span class="drawer-nav-icon">🏠</span>
+            <div class="drawer-nav-text">
+              <strong>Início</strong>
+              <small>Apresentação & CTAs</small>
+            </div>
+          </button>
+          <button class="drawer-nav-item" data-tab="dashboard">
+            <span class="drawer-nav-icon">📊</span>
+            <div class="drawer-nav-text">
+              <strong>Dashboard ROI</strong>
+              <small>Métricas e gráficos</small>
+            </div>
+          </button>
+          <button class="drawer-nav-item" data-tab="despesas">
+            <span class="drawer-nav-icon">📝</span>
+            <div class="drawer-nav-text">
+              <strong>Lançamentos</strong>
+              <small>Despesas, custos & recibos</small>
+            </div>
+          </button>
+          <button class="drawer-nav-item" data-tab="etapas">
+            <span class="drawer-nav-icon">🧱</span>
+            <div class="drawer-nav-text">
+              <strong>Etapas da Obra</strong>
+              <small>Progresso físico-financeiro</small>
+            </div>
+          </button>
+          <button class="drawer-nav-item" data-tab="relatorios">
+            <span class="drawer-nav-icon">📄</span>
+            <div class="drawer-nav-text">
+              <strong>Relatório Completo</strong>
+              <small>Prestação de contas</small>
+            </div>
+          </button>
+          <button class="drawer-nav-item" data-tab="configuracoes">
+            <span class="drawer-nav-icon">⚙️</span>
+            <div class="drawer-nav-text">
+              <strong>Imóvel & Dados</strong>
+              <small>Configurações e backup</small>
+            </div>
+          </button>
+          <button class="drawer-nav-item" data-tab="sobre">
+            <span class="drawer-nav-icon">ℹ️</span>
+            <div class="drawer-nav-text">
+              <strong>Sobre</strong>
+              <small>Objetivos, termos e privacidade</small>
+            </div>
+          </button>
+        </nav>
+
+        <div class="drawer-section-label">
+          <span>Ações Rápidas</span>
+        </div>
+        <div class="drawer-actions">
+          <button id="btnDrawerAuthToggle" class="drawer-action-btn drawer-action-auth">
+            <span class="drawer-action-icon">🔑</span>
+            <span>Entrar como Admin</span>
+          </button>
+          <button id="btnDrawerExportCSV" class="drawer-action-btn">
+            <span class="drawer-action-icon">📊</span>
+            <span>Exportar Planilha CSV</span>
+          </button>
+          <button id="btnDrawerPrintReport" class="drawer-action-btn">
+            <span class="drawer-action-icon">🖨️</span>
+            <span>Gerar PDF / Imprimir</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="drawer-footer">
+        <div class="drawer-footer-brand">
+          <div class="drawer-footer-logo">RP</div>
+          <div>
+            <strong>ReformaPlus ROI</strong>
+            <small>v1.0 · Funciona Offline</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Container Principal -->
+  <main class="app-container">
+
+    <!-- Navegação Horizontal em Telas Grandes (Desktop) -->
+    <nav class="app-nav desktop-only no-print">
+      <button class="nav-tab active" data-tab="home">
+        🏠 Início
+      </button>
+      <button class="nav-tab" data-tab="dashboard">
+        📊 Dashboard ROI
+      </button>
+      <button class="nav-tab" data-tab="despesas">
+        📝 Lançamentos
+      </button>
+      <button class="nav-tab" data-tab="etapas">
+        🧱 Etapas & Obras
+      </button>
+      <button class="nav-tab" data-tab="relatorios">
+        📄 Relatório Completo
+      </button>
+      <button class="nav-tab" data-tab="configuracoes">
+        ⚙️ Imóvel & Dados
+      </button>
+      <button class="nav-tab" data-tab="sobre">
+        ℹ️ Sobre
+      </button>
+    </nav>
+
+    <!-- ABA 0: TELA INICIAL (LANDING / HOME) -->
+    <section id="tab-home" class="tab-content active">
+
+      <!-- SEÇÃO 1: HERO 2D/3D COM CTA PRINCIPAL -->
+      <div class="home-hero-section">
+        <div class="home-hero-bg">
+          <div class="home-blob home-blob-1"></div>
+          <div class="home-blob home-blob-2"></div>
+          <div class="home-blob home-blob-3"></div>
+          <div class="home-grid-overlay"></div>
+        </div>
+        <div class="home-hero-inner">
+          <div class="home-hero-left">
+            <span class="home-hero-badge">
+              <span class="badge-pill-green"></span>
+              Nova Geração de Gestão de Obras · 100% Offline
+            </span>
+            <h1 class="home-hero-title">
+              Pare de <span class="text-gradient-green-purple">perder dinheiro</span>
+              em cada reforma.
+            </h1>
+            <p class="home-hero-subtitle">
+              Dashboard ROI, orçamento, custos por categoria, etapas da obra e recibos
+              — <strong>tudo conectado</strong> no seu navegador, sem nuvem, sem
+              planilhas quebradas e sem cadastro. Ideal para <strong>Flip
+                Imobiliário</strong> e reformas residenciais.
+            </p>
+
+            <div class="home-hero-cta-row">
+              <button class="home-btn home-btn-primary"
+                onclick="AppController.switchTab('configuracoes'); AppController.scrollToTop();">
+                <span>🚀</span>
+                <strong>Cadastrar Meu Imóvel</strong>
+              </button>
+              <button class="home-btn home-btn-secondary"
+                onclick="AppController.switchTab('dashboard'); AppController.scrollToTop();">
+                <span>📊</span>
+                Ver Demonstração
+              </button>
+            </div>
+
+            <div class="home-hero-proof">
+              <div class="home-proof-avatars">
+                <div class="proof-avatar pa-1"></div>
+                <div class="proof-avatar pa-2"></div>
+                <div class="proof-avatar pa-3"></div>
+                <div class="proof-avatar pa-4">+</div>
+              </div>
+              <div class="home-proof-text">
+                <strong>500+ reformas</strong> gerenciadas no ReformaPlus
+                <div class="home-proof-stars">
+                  ★★★★★ <span>4.9 / 5</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="home-hero-right">
+            <div class="home-hero-mockup">
+              <div class="mockup-glow"></div>
+              <div class="mockup-window">
+                <div class="mockup-window-bar">
+                  <span class="dot dot-r"></span>
+                  <span class="dot dot-y"></span>
+                  <span class="dot dot-g"></span>
+                  <span class="mockup-title">ReformaPlus ROI · Dashboard</span>
+                </div>
+                <div class="mockup-content">
+                  <div class="mockup-stats-row">
+                    <div class="mockup-stat st-1"><small>Aquisição</small><strong>R$ 280k</strong></div>
+                    <div class="mockup-stat st-2"><small>Reforma</small><strong>R$ 65k</strong></div>
+                    <div class="mockup-stat st-3"><small>ARV</small><strong>R$ 420k</strong></div>
+                  </div>
+                  <div class="mockup-roi-card">
+                    <div class="mockup-roi-label">ROI Projetado</div>
+                    <div class="mockup-roi-value">20,69%</div>
+                    <div class="mockup-roi-bar"><span style="width:82%"></span></div>
+                    <div class="mockup-roi-sub">Lucro líquido estimado · R$ 75.000</div>
+                  </div>
+                  <div class="mockup-chart">
+                    <div class="chart-row"><span style="height:40%"></span></div>
+                    <div class="chart-row"><span style="height:70%"></span></div>
+                    <div class="chart-row"><span style="height:55%"></span></div>
+                    <div class="chart-row"><span style="height:88%"></span></div>
+                    <div class="chart-row"><span style="height:65%"></span></div>
+                    <div class="chart-row"><span style="height:92%"></span></div>
+                    <div class="chart-row"><span style="height:78%"></span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEÇÃO 2: NÚMEROS DE IMPACTO (4 stat cards) -->
+      <div class="home-section home-stats-section">
+        <div class="home-stats-grid">
+          <div class="home-stat-card">
+            <div class="stat-icon-wrap ic-green">💸</div>
+            <div class="stat-number">-32%</div>
+            <div class="stat-label">Custos estourados evitados em reformas controladas</div>
+          </div>
+          <div class="home-stat-card">
+            <div class="stat-icon-wrap ic-cyan">⏱️</div>
+            <div class="stat-number">-4h</div>
+            <div class="stat-label">Economia diária por engenheiro em planilhas de controle</div>
+          </div>
+          <div class="home-stat-card">
+            <div class="stat-icon-wrap ic-purple">📈</div>
+            <div class="stat-number">10-30%</div>
+            <div class="stat-label">Faixa de ROI típica em operações de Flip usando a plataforma</div>
+          </div>
+          <div class="home-stat-card">
+            <div class="stat-icon-wrap ic-gold">🔒</div>
+            <div class="stat-number">0%</div>
+            <div class="stat-label">Dos seus dados saem do dispositivo — zero nuvem, zero vazamento</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEÇÃO 3: PROBLEMA vs SOLUÇÃO -->
+      <div class="home-section home-vs-section">
+        <div class="home-section-header">
+          <span class="section-chip">PROBLEMA × SOLUÇÃO</span>
+          <h2>Chega do caos das planilhas soltas e recibos perdidos.</h2>
+          <p>Se você já controlou uma obra com Excel + WhatsApp, sabe como termina: informação perdida,
+            versão desatualizada e prejuízo descoberto tarde demais.</p>
+        </div>
+
+        <div class="home-vs-grid">
+          <div class="vs-card vs-card-bad">
+            <div class="vs-badge bad">❌ JEITO ANTIGO</div>
+            <h3>Controle manual caótico</h3>
+            <ul class="vs-list">
+              <li>Planilhas infinitas com versões conflitantes</li>
+              <li>Recibos e comprovantes perdidos na galeria do celular</li>
+              <li>Não sabe o ROI real até a venda ou entrega final</li>
+              <li>Decisões por "feeling", sem base em dados</li>
+              <li>Impossível provar o que foi gasto ao cliente</li>
+            </ul>
+          </div>
+
+          <div class="vs-arrow-wrap">
+            <div class="vs-arrow-circle">→</div>
+            <div class="vs-arrow-label">Mudei de lado</div>
+          </div>
+
+          <div class="vs-card vs-card-good">
+            <div class="vs-badge good">✅ COM REFORMAPLUS</div>
+            <h3>Dados centralizados, margem protegida</h3>
+            <ul class="vs-list">
+              <li>Dados do imóvel, gastos e etapas em um só lugar</li>
+              <li>Recibos anexados diretamente a cada lançamento</li>
+              <li>ROI calculado em tempo real, você vê o lucro hoje</li>
+              <li>Decisões guiadas por gráficos e métricas reais</li>
+              <li>Relatório completo em PDF / CSV em 1 clique</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEÇÃO 4: JORNADA EM 5 PASSOS -->
+      <div class="home-section home-journey-section">
+        <div class="home-section-header">
+          <span class="section-chip section-chip-dark">COMO FUNCIONA EM 5 PASSOS</span>
+          <h2><span class="text-gradient-green-purple">Pronto em minutos,</span> não em meses.</h2>
+          <p>Sem implantações demoradas, sem treinamentos caros. Você configura o
+            imóvel e já começa a lançar hoje mesmo.</p>
+        </div>
+
+        <div class="home-journey-grid">
+          <div class="journey-step">
+            <div class="step-circle">01</div>
+            <div class="step-card">
+              <div class="step-icon">🏦</div>
+              <h4>Cadastre o Imóvel</h4>
+              <p>Valor de aquisição, custos cartoriais, reforma orçada e preço de revenda estimado (ARV).</p>
+              <button class="step-cta-btn"
+                onclick="AppController.switchTab('configuracoes'); AppController.scrollToTop();">Começar →</button>
+            </div>
+          </div>
+          <div class="journey-step">
+            <div class="step-circle">02</div>
+            <div class="step-card">
+              <div class="step-icon">🧾</div>
+              <h4>Lançe os Custos</h4>
+              <p>Categorize materiais, serviços, ambientes e anexe o comprovante direto no lançamento.</p>
+              <button class="step-cta-btn"
+                onclick="AppController.switchTab('despesas'); AppController.scrollToTop();">Ver Lançamentos →</button>
+            </div>
+          </div>
+          <div class="journey-step">
+            <div class="step-circle">03</div>
+            <div class="step-card">
+              <div class="step-icon">🧱</div>
+              <h4>Etapas da Obra</h4>
+              <p>Atualize o progresso físico e financeiro de cada fase (alvenaria, hidráulica, elétrica, acabamento...).
+              </p>
+              <button class="step-cta-btn" onclick="AppController.switchTab('etapas'); AppController.scrollToTop();">Ver
+                Etapas →</button>
+            </div>
+          </div>
+          <div class="journey-step">
+            <div class="step-circle">04</div>
+            <div class="step-card">
+              <div class="step-icon">📊</div>
+              <h4>Veja o ROI Real</h4>
+              <p>Dashboard com gráficos por categoria, ambiente, margem projetada e alertas de desvio.</p>
+              <button class="step-cta-btn"
+                onclick="AppController.switchTab('dashboard'); AppController.scrollToTop();">Abrir Dashboard →</button>
+            </div>
+          </div>
+          <div class="journey-step">
+            <div class="step-circle">05</div>
+            <div class="step-card">
+              <div class="step-icon">📄</div>
+              <h4>Prestação de Contas</h4>
+              <p>Relatório completo em PDF ou CSV para sócios, clientes e contabilidade.</p>
+              <button class="step-cta-btn"
+                onclick="AppController.switchTab('relatorios'); AppController.scrollToTop();">Gerar Relatório →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEÇÃO 5: PILARES DO APP (6 features + CTA) -->
+      <div class="home-section home-features-section">
+        <div class="home-section-header">
+          <span class="section-chip">OS 6 PILARES DA PLATAFORMA</span>
+          <h2>Tudo o que você precisa para <span class="text-gradient-green-purple">nunca mais perder o controle</span>.
+          </h2>
+          <p>Seis módulos interligados cobrem todo o ciclo do projeto: desde a compra até a prestação de contas final.
+          </p>
+        </div>
+
+        <div class="home-features-grid">
+          <article class="feature-card f-dashboard">
+            <div class="feature-icon f-icon-1">📊</div>
+            <h3>Dashboard ROI</h3>
+            <p>Painel executivo com KPIs principais, ROI%, margem, gráficos de gasto por categoria e ambiente.</p>
+            <button class="feature-cta"
+              onclick="AppController.switchTab('dashboard'); AppController.scrollToTop();">Abrir Dashboard →</button>
+          </article>
+          <article class="feature-card f-despesas">
+            <div class="feature-icon f-icon-2">🧾</div>
+            <h3>Lançamentos & Recibos</h3>
+            <p>Tabela completa de insumos e serviços com categorização, anexo de recibos e filtros por período.</p>
+            <button class="feature-cta"
+              onclick="AppController.switchTab('despesas'); AppController.scrollToTop();">Abrir Lançamentos →</button>
+          </article>
+          <article class="feature-card f-etapas">
+            <div class="feature-icon f-icon-3">🧱</div>
+            <h3>Etapas da Obra</h3>
+            <p>Controle de % de conclusão por fase, status visual (pendente / em andamento / concluída) e alerta de
+              atraso.</p>
+            <button class="feature-cta" onclick="AppController.switchTab('etapas'); AppController.scrollToTop();">Abrir
+              Etapas →</button>
+          </article>
+          <article class="feature-card f-relatorios">
+            <div class="feature-icon f-icon-4">📄</div>
+            <h3>Relatórios & Exportação</h3>
+            <p>Prestação de contas em PDF (impressão) ou CSV (Excel) com detalhamento completo e ordenado.</p>
+            <button class="feature-cta"
+              onclick="AppController.switchTab('relatorios'); AppController.scrollToTop();">Abrir Relatórios →</button>
+          </article>
+          <article class="feature-card f-imovel">
+            <div class="feature-icon f-icon-5">🏡</div>
+            <h3>Imóvel & Backup</h3>
+            <p>Cadastro do imóvel, configuração de etapas e backup 100% local para nunca perder seus dados.</p>
+            <button class="feature-cta"
+              onclick="AppController.switchTab('configuracoes'); AppController.scrollToTop();">Configurar Imóvel
+              →</button>
+          </article>
+          <article class="feature-card f-privacidade">
+            <div class="feature-icon f-icon-6">🔒</div>
+            <h3>Dados 100% Offline</h3>
+            <p>PWA instala no celular como app. Tudo fica no localStorage do navegador — zero servidor, zero coleta.</p>
+            <button class="feature-cta"
+              onclick="AppController.switchTabAndScrollTo('sobre', 'anchor-sobre-privacidade');">Ver Privacidade
+              →</button>
+          </article>
+        </div>
+      </div>
+
+      <!-- SEÇÃO 6: QUEM USA (Público-alvo 4 cards) -->
+      <div class="home-section home-audience-section">
+        <div class="home-section-header">
+          <span class="section-chip section-chip-dark">QUEM USA A PLATAFORMA</span>
+          <h2>Feito para quem <span class="text-gradient-green-purple">vive de reforma ou investe em imóveis</span>.
+          </h2>
+          <p>Da dona de casa reformando o apê ao investidor profissional de Flip — o ReformaPlus serve para você.</p>
+        </div>
+        <div class="home-audience-grid">
+          <div class="audience-card au-1">
+            <div class="audience-avatar">👤</div>
+            <h4>Proprietário Residencial</h4>
+            <p>Quer controlar gastos da própria reforma, comparar orçamentos e evitar dor de cabeça com o empreiteiro.
+            </p>
+            <span class="audience-tag tag-green">Foco: custo e transparência</span>
+          </div>
+          <div class="audience-card au-2">
+            <div class="audience-avatar">🏢</div>
+            <h4>Investidor de Flip</h4>
+            <p>Compra, reforma e vende. Precisa de ROI real, margem por operação e velocidade para escalar o portfólio.
+            </p>
+            <span class="audience-tag tag-purple">Foco: retorno e escala</span>
+          </div>
+          <div class="audience-card au-3">
+            <div class="audience-avatar">👷</div>
+            <h4>Engenheiro / Arquiteto</h4>
+            <p>Gerencia múltiplos projetos, entrega prestação de contas profissional ao cliente e controla etapas.</p>
+            <span class="audience-tag tag-cyan">Foco: profissionalismo</span>
+          </div>
+          <div class="audience-card au-4">
+            <div class="audience-avatar">🧱</div>
+            <h4>Mestre de Obra / Reformista</h4>
+            <p>Controla custos por gremio, materiais, etapas e prova ao cliente o que foi entregue em cada fase.</p>
+            <span class="audience-tag tag-gold">Foco: controle de execução</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEÇÃO 7: CTA FINAL + SELOS DE PROVA SOCIAL -->
+      <div class="home-section home-final-cta">
+        <div class="final-cta-card">
+          <div class="final-cta-bg"></div>
+          <div class="final-cta-content">
+            <h2>Pronto para ter <span class="text-gradient-gold-white">controle TOTAL</span> da sua reforma ou Flip?
+            </h2>
+            <p>Sem cadastro, sem mensalidade, sem servidor na nuvem. 100% gratuito, 100% offline, 100% seu.</p>
+            <div class="final-cta-row">
+              <button class="home-btn home-btn-primary home-btn-xl"
+                onclick="AppController.switchTab('configuracoes'); AppController.scrollToTop();">
+                <span>🚀</span>
+                <strong>Começar Agora — Cadastrar Imóvel</strong>
+              </button>
+              <button class="home-btn home-btn-secondary home-btn-xl"
+                onclick="AppController.switchTab('dashboard'); AppController.scrollToTop();">
+                <span>📸</span>
+                Ver Demonstração do Dashboard
+              </button>
+            </div>
+            <div class="final-seals-row">
+              <div class="seal-chip">💾 100% Armazenamento Local</div>
+              <div class="seal-chip">📱 PWA Offline</div>
+              <div class="seal-chip">🔒 Zero Dados Compartilhados</div>
+              <div class="seal-chip">⚡ Carrega em 2 segundos</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ABA 1: DASHBOARD DE ROI -->
+    <section id="tab-dashboard" class="tab-content">
+      <!-- Cards de Métricas Principais -->
+      <div class="grid-cards">
+        <div class="metric-card">
+          <div class="card-header-sm">
+            <span class="card-title-sm">Valor de Aquisição</span>
+            <div class="card-icon">🏠</div>
+          </div>
+          <div class="card-value" id="metricPurchase">R$ 0,00</div>
+          <div class="card-subtext">Custo inicial do imóvel</div>
+        </div>
+
+        <div class="metric-card card-cyan">
+          <div class="card-header-sm">
+            <span class="card-title-sm">Total da Reforma</span>
+            <div class="card-icon">🛠️</div>
+          </div>
+          <div class="card-value" id="metricRenovationCost">R$ 0,00</div>
+          <div class="card-subtext">Materiais + Serviços + Taxas</div>
+        </div>
+
+        <div class="metric-card card-gold">
+          <div class="card-header-sm">
+            <span class="card-title-sm">Investimento Total</span>
+            <div class="card-icon">💰</div>
+          </div>
+          <div class="card-value" id="metricTotalInvestment">R$ 0,00</div>
+          <div class="card-subtext">Aquisição + Reforma + Impostos</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="card-header-sm">
+            <span class="card-title-sm">Venda Estimada</span>
+            <div class="card-icon">🏷️</div>
+          </div>
+          <div class="card-value" id="metricEstimatedResale">R$ 0,00</div>
+          <div class="card-subtext">Preço mercado pós-reforma</div>
+        </div>
+
+        <div class="metric-card card-purple">
+          <div class="card-header-sm">
+            <span class="card-title-sm">Lucro Líquido Estimado</span>
+            <div class="card-icon">📈</div>
+          </div>
+          <div class="card-value" id="metricNetProfit" style="color: var(--accent-emerald);">R$ 0,00</div>
+          <div class="card-subtext">Venda - Investimento Total</div>
+        </div>
+
+        <div class="metric-card card-gold">
+          <div class="card-header-sm">
+            <span class="card-title-sm">Margem ROI (%)</span>
+            <div class="card-icon">⚡</div>
+          </div>
+          <div class="card-value" id="metricROI" style="color: var(--accent-gold);">0,00%</div>
+          <div class="card-subtext">Retorno sobre investimento</div>
+        </div>
+      </div>
+
+      <!-- Resumo por Insumos e Gráficos -->
+      <div class="dashboard-row">
+        <!-- Gráficos de Distribuição -->
+        <div class="content-panel">
+          <div class="panel-header">
+            <h2 class="panel-title">📊 Gastos da Reforma por Categoria</h2>
+          </div>
+          <div id="chartCategory" class="chart-container"></div>
+        </div>
+
+        <!-- Distribuição por Ambiente -->
+        <div class="content-panel">
+          <div class="panel-header">
+            <h2 class="panel-title">🚪 Gastos por Ambiente</h2>
+          </div>
+          <div id="chartRoom" class="chart-container"></div>
+        </div>
+      </div>
+
+      <!-- Resumo Rápido de Insumos -->
+      <div class="content-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">🧾 Detalhamento por Insumos & Serviços</h2>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;">
+          <div
+            style="background: var(--bg-surface); padding: 1.2rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <span style="font-size: 0.85rem; color: var(--text-muted);">Materiais de Construção</span>
+            <h3 id="valMaterials" style="font-size: 1.4rem; color: var(--accent-cyan); margin-top: 0.3rem;">R$ 0,00</h3>
+          </div>
+          <div
+            style="background: var(--bg-surface); padding: 1.2rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <span style="font-size: 0.85rem; color: var(--text-muted);">Mão de Obra & Serviços</span>
+            <h3 id="valServices" style="font-size: 1.4rem; color: var(--accent-purple); margin-top: 0.3rem;">R$ 0,00
+            </h3>
+          </div>
+          <div
+            style="background: var(--bg-surface); padding: 1.2rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <span style="font-size: 0.85rem; color: var(--text-muted);">Documentação & Taxas</span>
+            <h3 id="valTaxes" style="font-size: 1.4rem; color: var(--accent-gold); margin-top: 0.3rem;">R$ 0,00</h3>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA 2: LANÇAMENTOS & DESPESAS -->
+    <section id="tab-despesas" class="tab-content">
+      <!-- Formulário de Novo Lançamento -->
+      <div class="content-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">➕ Cadastrar Despesa / Material / Serviço</h2>
+        </div>
+        <form id="expenseForm">
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label" for="expenseDate">Data do Lançamento</label>
+              <input type="date" id="expenseDate" class="form-input" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="expenseType">Tipo de Lançamento</label>
+              <select id="expenseType" class="form-select" required>
+                <option value="material">Material de Construção</option>
+                <option value="servico">Mão de Obra / Serviço</option>
+                <option value="taxa">Taxa / Documentação</option>
+                <option value="outro">Outros Gastos</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="expenseCategory">Categoria</label>
+              <select id="expenseCategory" class="form-select" required>
+                <option value="Demolição">Demolição e Limpeza</option>
+                <option value="Alvenaria">Alvenaria e Estrutura</option>
+                <option value="Elétrica">Instalações Elétricas</option>
+                <option value="Hidráulica">Instalações Hidráulicas</option>
+                <option value="Gesso">Gesso e Drywall</option>
+                <option value="Revestimento">Pisos e Revestimentos</option>
+                <option value="Pintura">Pintura e Texturas</option>
+                <option value="Marcenaria">Marcenaria e Iluminação</option>
+                <option value="Documentação & Impostos">Documentação & Taxas</option>
+                <option value="Diversos">Diversos / Ferramentas</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="expenseRoom">Ambiente / Cômodo</label>
+              <select id="expenseRoom" class="form-select" required>
+                <option value="Geral">Geral / Toda a Casa</option>
+                <option value="Cozinha">Cozinha</option>
+                <option value="Banheiro Social">Banheiro Social</option>
+                <option value="Banheiro Suíte">Banheiro Suíte</option>
+                <option value="Quartos">Quartos / Dormitórios</option>
+                <option value="Sala">Sala de Estar / Jantar</option>
+                <option value="Fachada">Fachada & Garagem</option>
+                <option value="Área Externa">Área Externa & Quintal</option>
+                <option value="Telhado">Telhado & Calhas</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="expenseSupplier">Fornecedor / Profissional</label>
+              <input type="text" id="expenseSupplier" class="form-input"
+                placeholder="ex: Leroy Merlin, Eletricista João" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="expenseAmount">Valor Total (R$)</label>
+              <input type="number" step="0.01" id="expenseAmount" class="form-input" placeholder="0.00" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="expenseStatus">Status de Pagamento</label>
+              <select id="expenseStatus" class="form-select" required>
+                <option value="pago">Pago</option>
+                <option value="pendente">Pendente / A Pagar</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="expenseReceiptInput">Anexar Comprovante / Recibo</label>
+              <input type="file" id="expenseReceiptInput" class="form-input" accept="image/*,.pdf">
+              <div id="receiptPreviewContainer"></div>
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label" for="expenseDescription">Descrição / Observações</label>
+              <textarea id="expenseDescription" class="form-textarea"
+                placeholder="Detalhes dos materiais comprados, especificações ou garantias..."></textarea>
+            </div>
+          </div>
+
+          <div style="margin-top: 1.25rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
+            <button type="button" class="btn btn-outline" onclick="AppController.resetExpenseForm()">Limpar</button>
+            <button type="submit" id="btnSubmitExpense" class="btn btn-primary">Adicionar Lançamento</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Tabela e Filtros de Lançamentos -->
+      <div class="content-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">📋 Histórico de Gastos</h2>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <input type="text" id="filterSearch" class="form-input" style="width: 200px;"
+              placeholder="Buscar fornecedor/item...">
+            <select id="filterType" class="form-select" style="width: 140px;">
+              <option value="">Todos os Tipos</option>
+              <option value="material">Material</option>
+              <option value="servico">Mão de Obra</option>
+              <option value="taxa">Taxa</option>
+            </select>
+            <select id="filterCategory" class="form-select" style="width: 160px;">
+              <option value="">Todas Categorias</option>
+              <option value="Demolição">Demolição</option>
+              <option value="Alvenaria">Alvenaria</option>
+              <option value="Elétrica">Elétrica</option>
+              <option value="Hidráulica">Hidráulica</option>
+              <option value="Revestimento">Revestimento</option>
+              <option value="Pintura">Pintura</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Tipo</th>
+                <th>Categoria</th>
+                <th>Ambiente</th>
+                <th>Fornecedor / Descrição</th>
+                <th>Valor (R$)</th>
+                <th>Status</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="expensesTableBody">
+              <!-- Preenchido dinamicamente via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA 3: ETAPAS DA REFORMA -->
+    <section id="tab-etapas" class="tab-content">
+      <div class="content-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">🧱 Progresso Físico-Financeiro das Etapas</h2>
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">
+          Acompanhe a evolução da obra etapa por etapa para garantir que a reforma termine no prazo e dentro do
+          orçamento estipulado.
+        </p>
+
+        <div id="phasesContainer">
+          <!-- Preenchido dinamicamente via JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA 4: RELATÓRIOS & PDF -->
+    <section id="tab-relatorios" class="tab-content">
+      <div class="content-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">📄 Relatório Completo de Prestação de Contas</h2>
+          <button class="btn btn-primary btn-sm no-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+        </div>
+
+        <div id="reportContentContainer">
+          <!-- Conteúdo Gerado dinamicamente -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA 5: CONFIGURAÇÕES & DADOS DO IMÓVEL -->
+    <section id="tab-configuracoes" class="tab-content">
+      <div class="content-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">🏠 Dados e Métrica do Imóvel (Flip)</h2>
+        </div>
+        <form id="propertyForm">
+          <div class="form-block-title">
+            <span class="form-block-icon">📌</span>
+            <h3>Identificação do Imóvel</h3>
+          </div>
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <label class="form-label" for="propTitle">Título / Apelido do Imóvel</label>
+              <input type="text" id="propTitle" class="form-input" placeholder="ex: Casa 3 Qts Jardim Europa" required>
+            </div>
+          </div>
+
+          <div class="form-block-title" style="margin-top: 1.75rem;">
+            <span class="form-block-icon">📍</span>
+            <h3>Endereço Completo</h3>
+          </div>
+          <div class="form-grid">
+            <div class="form-group form-group-cep">
+              <label class="form-label" for="propCep">CEP</label>
+              <div class="cep-search-row">
+                <input type="text" id="propCep" class="form-input" maxlength="9" placeholder="00000-000"
+                  inputmode="numeric" autocomplete="postal-code">
+                <button type="button" id="btnBuscarCep" class="btn btn-secondary btn-cep"
+                  onclick="AppController.buscarEnderecoPorCep()">
+                  <span>🔍</span> Buscar
+                </button>
+              </div>
+              <small id="cepStatusMsg" class="cep-status-msg">&nbsp;</small>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="propState">Estado (UF)</label>
+              <select id="propState" class="form-select">
+                <option value="">Selecione...</option>
+                <option value="AC">AC</option>
+                <option value="AL">AL</option>
+                <option value="AP">AP</option>
+                <option value="AM">AM</option>
+                <option value="BA">BA</option>
+                <option value="CE">CE</option>
+                <option value="DF">DF</option>
+                <option value="ES">ES</option>
+                <option value="GO">GO</option>
+                <option value="MA">MA</option>
+                <option value="MT">MT</option>
+                <option value="MS">MS</option>
+                <option value="MG">MG</option>
+                <option value="PA">PA</option>
+                <option value="PB">PB</option>
+                <option value="PR">PR</option>
+                <option value="PE">PE</option>
+                <option value="PI">PI</option>
+                <option value="RJ">RJ</option>
+                <option value="RN">RN</option>
+                <option value="RS">RS</option>
+                <option value="RO">RO</option>
+                <option value="RR">RR</option>
+                <option value="SC">SC</option>
+                <option value="SP">SP</option>
+                <option value="SE">SE</option>
+                <option value="TO">TO</option>
+              </select>
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label" for="propStreet">Logradouro (Rua / Avenida)</label>
+              <input type="text" id="propStreet" class="form-input" placeholder="Rua das Flores"
+                autocomplete="street-address">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="propNumber">Número</label>
+              <input type="text" id="propNumber" class="form-input" placeholder="123" autocomplete="address-line1">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="propComplement">Complemento</label>
+              <input type="text" id="propComplement" class="form-input" placeholder="Apto 45, Bloco C, Fundos"
+                autocomplete="address-line2">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="propNeighborhood">Bairro</label>
+              <input type="text" id="propNeighborhood" class="form-input" placeholder="Jardim Paulista"
+                autocomplete="address-level2">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="propCity">Cidade</label>
+              <input type="text" id="propCity" class="form-input" placeholder="São Paulo" autocomplete="address-level3">
+            </div>
+          </div>
+
+          <div class="form-block-title" style="margin-top: 1.75rem;">
+            <span class="form-block-icon">💰</span>
+            <h3>Valores e Métricas do Flip</h3>
+          </div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label" for="propPurchasePrice">Valor de Aquisição (R$)</label>
+              <input type="number" step="0.01" id="propPurchasePrice" class="form-input" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="propEstimatedResalePrice">Valor Estimado de Venda - ARV (R$)</label>
+              <input type="number" step="0.01" id="propEstimatedResalePrice" class="form-input" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="propHoldingCosts">Custos Fixos / Holding (R$)</label>
+              <input type="number" step="0.01" id="propHoldingCosts" class="form-input"
+                placeholder="IPTU, energia, água, cartório...">
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label" for="propNotes">Observações da Oportunidade</label>
+              <textarea id="propNotes" class="form-textarea"
+                placeholder="Anotações sobre potencial de valorização, perfil de compradores alvo, etc..."></textarea>
+            </div>
+          </div>
+
+          <div style="margin-top: 1.25rem; display: flex; justify-content: flex-end;">
+            <button type="submit" class="btn btn-primary">Salvar Dados do Imóvel</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Segurança & Senha do Administrador -->
+      <div class="content-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">🔐 Segurança & Senha do Administrador</h2>
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.25rem;">
+          Altere a senha de acesso usada para liberar o cadastro, edição e alteração de dados (Senha padrão inicial:
+          <strong>1234</strong>).
+        </p>
+        <form id="changePinForm">
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label" for="currentPinInput">Senha Atual</label>
+              <input type="password" id="currentPinInput" class="form-input" placeholder="Digite a senha atual"
+                required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="newPinInput">Nova Senha</label>
+              <input type="password" id="newPinInput" class="form-input" placeholder="Nova senha (mínimo 4 dígitos)"
+                required>
+            </div>
+          </div>
+          <div style="margin-top: 1.25rem; display: flex; justify-content: flex-end;">
+            <button type="submit" class="btn btn-gold">Atualizar Senha</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Gerenciamento e Backup de Dados -->
+      <div class="content-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">💾 Backup e Gerenciamento de Dados</h2>
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.25rem;">
+          Seus dados são armazenados localmente no dispositivo. Você pode exportar backups em JSON ou restaurar os dados
+          iniciais de demonstração a qualquer momento.
+        </p>
+
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+          <button id="btnResetData" class="btn btn-danger">
+            🔄 Restaurar Dados de Demonstração
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA 6: SOBRE (Objetivos, Termos, Privacidade e Redes Sociais) -->
+    <section id="tab-sobre" class="tab-content">
+      <div class="content-panel" id="anchor-sobre-inicio">
+        <div class="panel-header">
+          <h2 class="panel-title">ℹ️ Sobre o ReformaPlus ROI</h2>
+        </div>
+
+        <div class="about-hero-card">
+          <div class="about-hero-logo">
+            <img src="./assets/icons/icon-192.png" alt="Logo ReformaPlus ROI"
+              style="width: 72px; height: 72px; border-radius: 18px;">
+          </div>
+          <div>
+            <h3 class="about-hero-title">ReformaPlus ROI · v1.0</h3>
+            <p class="about-hero-sub">Gestão Profissional de Reformas Residenciais e Operações de Flip Imobiliário</p>
+            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem;">
+              <span class="badge badge-pago">100% Offline</span>
+              <span class="badge badge-pago">PWA · Instala como App</span>
+              <span class="badge badge-parcial">Dados Locais</span>
+              <span class="badge badge-pendente">Sem anúncios</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Objetivos e Utilidade -->
+      <div class="content-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">🎯 Utilidade e Objetivos</h2>
+        </div>
+        <div class="about-text-block">
+          <p>
+            O <strong>ReformaPlus ROI</strong> foi concebido para ser o <em>companheiro digital</em> de todo
+            proprietário,
+            engenheiro, arquiteto ou investidor imobiliário que realiza uma <strong>reforma residencial</strong> ou
+            operações
+            de <strong>compra, reforma e venda (Flip Imobiliário)</strong>.
+          </p>
+          <h4 class="about-subtitle">✅ Principais Objetivos</h4>
+          <ul class="about-list">
+            <li><strong>Controlar o orçamento</strong> — lançar e categorizar cada gasto de materiais, mão de obra,
+              taxas, documentação e impostos;</li>
+            <li><strong>Medir o retorno (ROI)</strong> — visualizar em tempo real o custo total da reforma versus o
+              valor de revenda estimado;</li>
+            <li><strong>Acompanhar as etapas físicas</strong> — marcar pendente / em andamento / concluído para cada
+              fase da obra;</li>
+            <li><strong>Organizar recibos e comprovantes</strong> — anexar fotos dos recibos diretamente nos
+              lançamentos;</li>
+            <li><strong>Gerar prestação de contas</strong> — relatório completo pronto para impressão ou PDF +
+              exportação CSV;</li>
+            <li><strong>Funcionar sem internet</strong> — Progressive Web App com dados 100% locais, ideal para
+              canteiros de obras sem Wi-Fi.</li>
+          </ul>
+          <h4 class="about-subtitle">🏗️ Público-Alvo</h4>
+          <ul class="about-list">
+            <li>Proprietários reformando suas casas para moradia ou aluguel;</li>
+            <li>Investidores de <em>House Flipping</em> (comprar, reformar, vender);</li>
+            <li>Pedreiros, mestres de obras, engenheiros e arquitetos que querem oferecer gestão transparente ao
+              cliente;</li>
+            <li>Incorporadores e construtoras pequenas com múltiplas reformas simultâneas.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Termos de Uso -->
+      <div class="content-panel" id="anchor-sobre-termos">
+        <div class="panel-header">
+          <h2 class="panel-title">📜 Termos de Uso</h2>
+        </div>
+        <div class="about-text-block">
+          <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1rem;">
+            Última atualização: <strong>Agosto de 2026</strong>
+          </p>
+          <h4 class="about-subtitle">1. Aceitação dos Termos</h4>
+          <p>
+            Ao utilizar o ReformaPlus ROI, você concorda com estes Termos de Uso. O aplicativo é oferecido "como está",
+            sem garantias de qualquer tipo, expressas ou implícitas.
+          </p>
+          <h4 class="about-subtitle">2. Uso Permitido</h4>
+          <ul class="about-list">
+            <li>O uso é estritamente pessoal e/ou profissional para fins de gestão de obras e reformas;</li>
+            <li>É proibido revender, sublicenciar ou reproduzir o código do aplicativo para comercialização;</li>
+            <li>É proibido utilizar a plataforma para fins ilegais, fraudulentos ou que violem direitos de terceiros.
+            </li>
+          </ul>
+          <h4 class="about-subtitle">3. Responsabilidade e Risco</h4>
+          <p>
+            Todos os dados cadastrados (valores, recibos, informações do imóvel) são armazenados
+            <strong>unicamente no armazenamento local do seu navegador ou dispositivo móvel</strong>.
+            O <strong>ReformaPlus não sincroniza, envia ou armazena suas informações em servidores externos</strong>.
+            Portanto:
+          </p>
+          <ul class="about-list">
+            <li><strong>Faça backup regularmente</strong> utilizando a função "Exportar CSV" ou "Restaurar Dados";</li>
+            <li>Ao limpar dados do navegador, desinstalar o app ou formatar o celular, <em>os dados serão perdidos
+                permanentemente</em>;</li>
+            <li>Não nos responsabilizamos por perdas de dados, erros de cálculo ou decisões de investimento tomadas com
+              base nas métricas geradas.</li>
+          </ul>
+          <h4 class="about-subtitle">4. Propriedade Intelectual</h4>
+          <p>
+            Logotipos, design de interface, algoritmos de cálculo e marca "ReformaPlus ROI" são de titularidade
+            dos seus respectivos proprietários.
+          </p>
+        </div>
+      </div>
+
+      <!-- Política de Privacidade -->
+      <div class="content-panel" id="anchor-sobre-privacidade">
+        <div class="panel-header">
+          <h2 class="panel-title">🔒 Política de Privacidade</h2>
+        </div>
+        <div class="about-text-block">
+          <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1rem;">
+            Nós <strong>não coletamos, não vendemos e não compartilhamos</strong> nenhum dado pessoal seu.
+            Esta página explica exatamente o que acontece com as suas informações.
+          </p>
+
+          <h4 class="about-subtitle">🛡️ Resumo Executivo em 3 Pontos</h4>
+          <div class="about-highlight-grid">
+            <div class="about-highlight-card">
+              <span class="about-highlight-icon">📭</span>
+              <div>
+                <strong>Zero coleta</strong>
+                <small>Nenhum dado pessoal, financeiro ou de navegação sai do seu dispositivo.</small>
+              </div>
+            </div>
+            <div class="about-highlight-card">
+              <span class="about-highlight-icon">☁️</span>
+              <div>
+                <strong>Sem nuvem</strong>
+                <small>Sem servidores, sem bancos externos, sem integrações de terceiros.</small>
+              </div>
+            </div>
+            <div class="about-highlight-card">
+              <span class="about-highlight-icon">💾</span>
+              <div>
+                <strong>100% local</strong>
+                <small>Tudo fica salvo apenas em <code>localStorage</code> do seu navegador.</small>
+              </div>
+            </div>
+          </div>
+
+          <h4 class="about-subtitle">1. Dados que Armazenamos Localmente</h4>
+          <ul class="about-list">
+            <li><strong>Dados do imóvel:</strong> título, endereço, valores de aquisição e venda estimada;</li>
+            <li><strong>Lançamentos:</strong> descrição, categoria, ambiente, valor, data, status e foto do recibo
+              (quando anexada);</li>
+            <li><strong>Etapas da obra:</strong> status e nomes das fases da reforma;</li>
+            <li><strong>Preferências:</strong> senha do administrador (em texto simples), tema claro/escuro.</li>
+          </ul>
+
+          <h4 class="about-subtitle">2. Cookies e Rastreamento</h4>
+          <p>
+            Não utilizamos cookies de publicidade, analytics, pixel de rastreamento, fingerprint ou qualquer mecanismo
+            de acompanhamento de usuário. O único armazenamento local é o estritamente necessário para o funcionamento
+            do aplicativo conforme descrito acima.
+          </p>
+
+          <h4 class="about-subtitle">3. Service Worker & PWA</h4>
+          <p>
+            O Service Worker (arquivo <code>sw.js</code>) registrado no seu navegador serve apenas para:
+          </p>
+          <ul class="about-list">
+            <li>Permitir a instalação do app na tela inicial do celular (PWA);</li>
+            <li>Manter os arquivos em cache para funcionamento <strong>offline</strong> total;</li>
+            <li>Acelerar o carregamento do site.</li>
+          </ul>
+
+          <h4 class="about-subtitle">4. Como Apagar Tudo</h4>
+          <p>
+            Para eliminar <em>100%</em> dos seus dados do ReformaPlus:
+          </p>
+          <ul class="about-list">
+            <li>Clique em ⚙️ Configurações → "Restaurar Dados de Demonstração" (zera os lançamentos);</li>
+            <li>Ou, no Chrome → Configurações → Privacidade e Segurança → "Limpar dados do site" → escolha
+              localhost:8080;</li>
+            <li>Ou, no celular instalado: toque e segure no ícone → "Limpar dados" / Desinstalar.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Redes Sociais / Contato -->
+      <div class="content-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">🌐 Redes Sociais & Contato</h2>
+        </div>
+        <div class="about-text-block">
+          <p>
+            Tem dúvidas, sugestões ou quer seguir as novidades? Acompanhe nossos canais oficiais:
+          </p>
+
+          <div class="about-social-grid">
+            <a href="https://instagram.com/" target="_blank" rel="noopener noreferrer"
+              class="about-social-link about-social-instagram">
+              <span class="about-social-icon">📷</span>
+              <div>
+                <strong>Instagram</strong>
+                <small>@reforma.oficial</small>
+              </div>
+              <span class="about-social-arrow">↗</span>
+            </a>
+
+            <a href="https://facebook.com/" target="_blank" rel="noopener noreferrer"
+              class="about-social-link about-social-facebook">
+              <span class="about-social-icon">📘</span>
+              <div>
+                <strong>Facebook</strong>
+                <small>/ReformaPlus</small>
+              </div>
+              <span class="about-social-arrow">↗</span>
+            </a>
+
+            <a href="https://youtube.com/" target="_blank" rel="noopener noreferrer"
+              class="about-social-link about-social-youtube">
+              <span class="about-social-icon">▶️</span>
+              <div>
+                <strong>YouTube</strong>
+                <small>Canal de Dicas de Reforma</small>
+              </div>
+              <span class="about-social-arrow">↗</span>
+            </a>
+
+            <a href="https://tiktok.com/" target="_blank" rel="noopener noreferrer"
+              class="about-social-link about-social-tiktok">
+              <span class="about-social-icon">🎵</span>
+              <div>
+                <strong>TikTok</strong>
+                <small>@reformaplus · Antes & Depois</small>
+              </div>
+              <span class="about-social-arrow">↗</span>
+            </a>
+
+            <a href="https://linkedin.com/" target="_blank" rel="noopener noreferrer"
+              class="about-social-link about-social-linkedin">
+              <span class="about-social-icon">💼</span>
+              <div>
+                <strong>LinkedIn</strong>
+                <small>Parcerias e Profissionais</small>
+              </div>
+              <span class="about-social-arrow">↗</span>
+            </a>
+
+            <a href="mailto:contato@reformaplus.app" class="about-social-link about-social-email">
+              <span class="about-social-icon">✉️</span>
+              <div>
+                <strong>E-mail</strong>
+                <small>contato@reformaplus.app</small>
+              </div>
+              <span class="about-social-arrow">↗</span>
+            </a>
+          </div>
+
+          <div class="about-cta-card">
+            <div>
+              <strong>💡 Gostou do aplicativo?</strong>
+              <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem; color: var(--text-muted);">
+                Compartilhe com um amigo que está reformando a casa — ele vai agradecer!
+              </p>
+            </div>
+            <button class="btn btn-gold"
+              onclick="navigator.share && navigator.share({ title: 'ReformaPlus ROI', text: 'Gestão completa de reformas e ROI para Flip Imobiliário!', url: location.href }).catch(()=>{});">
+              📤 Compartilhar App
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Rodapé Global da Página -->
+  <footer class="app-footer no-print">
+    <div class="app-footer-inner">
+      <div class="footer-brand" style="cursor:pointer;" onclick="AppController.goHome()" title="Voltar para o início">
+        <div class="drawer-footer-logo" style="width:38px; height:38px; border-radius:10px; font-size:0.85rem;">RP</div>
+        <div>
+          <strong style="color:var(--text-main); font-weight:700;">ReformaPlus ROI</strong>
+          <small style="color:var(--text-dim); display:block;">Gestão de Obras Residenciais · 100% Offline</small>
+        </div>
+      </div>
+
+      <div class="footer-links">
+        <button class="footer-link" onclick="AppController.switchTabAndScrollTo('sobre', 'anchor-sobre-inicio')">ℹ️
+          Sobre</button>
+        <button class="footer-link" onclick="AppController.switchTabAndScrollTo('sobre', 'anchor-sobre-termos')">📜
+          Termos</button>
+        <button class="footer-link" onclick="AppController.switchTabAndScrollTo('sobre', 'anchor-sobre-privacidade')">🔒
+          Privacidade</button>
+      </div>
+
+      <div class="footer-social">
+        <a href="https://instagram.com/" target="_blank" rel="noopener noreferrer" title="Instagram">📷</a>
+        <a href="https://facebook.com/" target="_blank" rel="noopener noreferrer" title="Facebook">📘</a>
+        <a href="https://youtube.com/" target="_blank" rel="noopener noreferrer" title="YouTube">▶️</a>
+        <a href="https://linkedin.com/" target="_blank" rel="noopener noreferrer" title="LinkedIn">💼</a>
+        <a href="mailto:contato@reformaplus.app" title="E-mail">✉️</a>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <small>© 2026 ReformaPlus ROI. Todos os direitos reservados · Feito com 🟢 no Brasil</small>
+    </div>
+  </footer>
+
+  <!-- Modal de Autenticação / Login Admin -->
+  <div id="modalAuthBackdrop" class="modal-backdrop">
+    <div class="modal-box" style="max-width: 420px;">
+      <div class="modal-header">
+        <h3 class="modal-title">🔐 Acesso Restrito ao Administrador</h3>
+        <button class="btn btn-outline btn-sm" onclick="AppController.closeModalAuth()">✖️</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.2rem;">
+          Digite a senha de administrador para liberar o cadastro, edição e alteração de dados.
+        </p>
+        <form id="authLoginForm">
+          <div class="form-group">
+            <label class="form-label" for="authPinInput">Senha de Acesso</label>
+            <input type="password" id="authPinInput" class="form-input" placeholder="Digite a senha (padrão: 1234)"
+              required autocomplete="current-password">
+          </div>
+          <div id="authErrorMsg"
+            style="color: var(--status-danger); font-size: 0.85rem; margin-top: 0.5rem; display: none;">
+            ❌ Senha incorreta! Tente novamente.
+          </div>
+          <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
+            <button type="button" class="btn btn-outline" onclick="AppController.closeModalAuth()">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Entrar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para Visualização de Recibo/Comprovante -->
+  <div id="modalReceiptBackdrop" class="modal-backdrop">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">📎 Comprovante / Recibo Anexado</h3>
+        <button class="btn btn-outline btn-sm" onclick="AppController.closeModalReceipt()">✖️</button>
+      </div>
+      <div class="modal-body" id="modalReceiptBody">
+        <!-- Imagem inserida via JS -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="AppController.closeModalReceipt()">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts JavaScript -->
+  <script src="./assets/js/storage.js"></script>
+  <script src="./assets/js/metrics.js"></script>
+  <script src="./assets/js/reports.js"></script>
+  <script src="./assets/js/supabaseClient.js"></script>
+  <script src="./assets/js/supabaseSync.js"></script>
+  <script src="./assets/js/app.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,24 @@
+{
+  "name": "ReformaPlus ROI - Gestão de Reforma e Flip Imobiliário",
+  "short_name": "ReformaPlus",
+  "description": "Controle financeiro, gestão de materiais, serviços e cálculo de ROI para reformas e revenda imobiliária.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#10b981",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "./assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
