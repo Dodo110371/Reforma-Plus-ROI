@@ -31,3 +31,5 @@ supabase/logs/
 
 cypress/
 coverage/
+
+env.js
