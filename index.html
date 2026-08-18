@@ -40,8 +40,7 @@
   <meta name="VITE_SUPABASE_ANON_KEY" content="">
   <meta name="VITE_SUPABASE_BUCKET_RECEIPTS" content="receipts">
 
-  <!-- Supabase JS SDK CDN (carregado antes de storage/app) -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
+  <!-- Supabase JS SDK CDN - carregado NO FINAL DO BODY, antes de env.js/supabaseClient.js, SEM defer -->
 </head>
 
 <body data-theme="dark">
@@ -1336,30 +1335,70 @@
     </div>
   </footer>
 
-  <!-- Modal de Autenticação / Login Admin -->
+  <!-- Modal de Autenticação / Login Admin (Híbrido: Supabase + PIN Local) -->
   <div id="modalAuthBackdrop" class="modal-backdrop">
-    <div class="modal-box" style="max-width: 420px;">
+    <div class="modal-box" style="max-width: 440px;">
       <div class="modal-header">
         <h3 class="modal-title">🔐 Acesso Restrito ao Administrador</h3>
         <button class="btn btn-outline btn-sm" onclick="AppController.closeModalAuth()">✖️</button>
       </div>
       <div class="modal-body">
-        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.2rem;">
-          Digite a senha de administrador para liberar o cadastro, edição e alteração de dados.
-        </p>
+        <div id="authModeTabs"
+          style="display:flex; gap:0.5rem; margin-bottom:1.25rem; border-bottom:1px solid var(--border-color); padding-bottom:0.75rem;">
+          <button type="button" id="authModeCloudBtn" class="btn btn-sm btn-outline"
+            onclick="AppController.switchAuthMode('cloud')" style="flex:1;">
+            ☁️ Nuvem (Supabase)
+          </button>
+          <button type="button" id="authModeLocalBtn" class="btn btn-sm btn-outline"
+            onclick="AppController.switchAuthMode('local')" style="flex:1;">
+            📌 Local (PIN)
+          </button>
+        </div>
+
+        <div id="authCloudNotice"
+          style="font-size:0.82rem; color:var(--info-color); background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.2); padding:0.55rem 0.75rem; border-radius:10px; margin-bottom:1rem; display:none;">
+          ⓘ Conectado ao Supabase. Use seu email e senha para sincronizar dados com a nuvem.
+        </div>
+        <div id="authLocalNotice"
+          style="font-size:0.82rem; color:var(--text-muted); background:rgba(120,120,130,0.08); border:1px solid var(--border-color); padding:0.55rem 0.75rem; border-radius:10px; margin-bottom:1rem; display:none;">
+          ⓘ Modo offline. Alterações ficam apenas neste navegador até conectar ao Supabase.
+        </div>
+
         <form id="authLoginForm">
-          <div class="form-group">
-            <label class="form-label" for="authPinInput">Senha de Acesso</label>
-            <input type="password" id="authPinInput" class="form-input" placeholder="Digite a senha (padrão: 1234)"
-              required autocomplete="current-password">
+          <div id="authCloudFields">
+            <div class="form-group">
+              <label class="form-label" for="authEmailInput">E-mail</label>
+              <input type="email" id="authEmailInput" class="form-input" placeholder="seu@email.com"
+                autocomplete="email">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="authPasswordInput">Senha</label>
+              <input type="password" id="authPasswordInput" class="form-input" placeholder="Sua senha do Supabase"
+                autocomplete="current-password">
+            </div>
           </div>
+
+          <div id="authLocalFields">
+            <div class="form-group">
+              <label class="form-label" for="authPinInput">Senha de Acesso (PIN)</label>
+              <input type="password" id="authPinInput" class="form-input" placeholder="Digite a senha (padrão: 1234)"
+                autocomplete="current-password">
+            </div>
+          </div>
+
           <div id="authErrorMsg"
             style="color: var(--status-danger); font-size: 0.85rem; margin-top: 0.5rem; display: none;">
-            ❌ Senha incorreta! Tente novamente.
+            ❌ Acesso negado! Verifique suas credenciais.
           </div>
+
+          <div id="authLoadingHint"
+            style="color: var(--text-muted); font-size: 0.82rem; margin-top: 0.75rem; display: none;">
+            ⏳ Entrando...
+          </div>
+
           <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
             <button type="button" class="btn btn-outline" onclick="AppController.closeModalAuth()">Cancelar</button>
-            <button type="submit" class="btn btn-primary">Entrar</button>
+            <button type="submit" id="authSubmitBtn" class="btn btn-primary">Entrar</button>
           </div>
         </form>
       </div>
@@ -1386,6 +1425,7 @@
   <script src="./assets/js/storage.js"></script>
   <script src="./assets/js/metrics.js"></script>
   <script src="./assets/js/reports.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
   <script src="./env.js"></script>
   <script src="./assets/js/supabaseClient.js"></script>
   <script src="./assets/js/supabaseSync.js"></script>

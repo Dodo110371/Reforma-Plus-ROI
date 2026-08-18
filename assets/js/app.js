@@ -14,18 +14,32 @@ class AppController {
   static deferredInstallPrompt = null;
 
   static init() {
-    // 1. Inicializa o banco de dados local
     StorageManager.initStorage();
     AuthManager.initAuth();
 
-    // 2. Registra Service Worker para PWA
+    if (window.SupabaseClient?.onChange) {
+      window.SupabaseClient.onChange((evt, session) => {
+        if (evt === 'SIGNED_IN' && session?.user) {
+          const userId = session.user.id;
+          const existingProp = StorageManager.getPropertyInfo();
+          if (existingProp && (!existingProp.user_id || existingProp.user_id === 'local-user-admin')) {
+            StorageManager.savePropertyInfo({ user_id: userId }, true);
+          }
+        }
+        AppController.updateAuthUI();
+        if (evt === 'SIGNED_IN') {
+          setTimeout(() => SupabaseSync.processQueue(), 800);
+        }
+      });
+    }
+
     this.registerServiceWorker();
-
-    // 3. Registra eventos da interface
     this.bindEvents();
-
-    // 4. Renderiza a tela inicial
     this.renderAllViews();
+
+    setTimeout(() => {
+      if (AuthManager.isAuthenticated()) SupabaseSync.processQueue();
+    }, 1500);
   }
 
   static requireAuth(actionCallback) {
@@ -254,25 +268,75 @@ class AppController {
     }
   }
 
+  static _authMode = 'local';
+
   static handleAuthToggle() {
     if (AuthManager.isAuthenticated()) {
-      AuthManager.logout();
-      this.updateAuthUI();
-      this.showToast('Você saiu do modo administrador.');
+      const hadCloud = AuthManager._hasSupabaseSessionSync();
+      if (hadCloud) {
+        AuthManager.signOutCloud().then(() => {
+          AuthManager.logout();
+          this.updateAuthUI();
+          this.showToast('Você saiu do modo administrador.');
+        });
+      } else {
+        AuthManager.logout();
+        this.updateAuthUI();
+        this.showToast('Você saiu do modo administrador.');
+      }
     } else {
       this.openModalAuth();
     }
   }
 
-  static openModalAuth() {
-    const modalBackdrop = document.getElementById('modalAuthBackdrop');
-    const pinInput = document.getElementById('authPinInput');
+  static switchAuthMode(mode) {
+    this._authMode = (mode === 'cloud') ? 'cloud' : 'local';
+    const cloudBtn = document.getElementById('authModeCloudBtn');
+    const localBtn = document.getElementById('authModeLocalBtn');
+    const cloudFields = document.getElementById('authCloudFields');
+    const localFields = document.getElementById('authLocalFields');
+    const cloudNotice = document.getElementById('authCloudNotice');
+    const localNotice = document.getElementById('authLocalNotice');
     const errorMsg = document.getElementById('authErrorMsg');
 
+    const isCloud = this._authMode === 'cloud';
+    if (cloudBtn) cloudBtn.className = 'btn btn-sm ' + (isCloud ? 'btn-primary' : 'btn-outline');
+    if (localBtn) localBtn.className = 'btn btn-sm ' + (isCloud ? 'btn-outline' : 'btn-primary');
+    if (cloudFields) cloudFields.style.display = isCloud ? 'block' : 'none';
+    if (localFields) localFields.style.display = isCloud ? 'none' : 'block';
+    if (cloudNotice) cloudNotice.style.display = isCloud ? 'block' : 'none';
+    if (localNotice) localNotice.style.display = isCloud ? 'none' : 'block';
     if (errorMsg) errorMsg.style.display = 'none';
+
+    setTimeout(() => {
+      if (isCloud) {
+        document.getElementById('authEmailInput')?.focus();
+      } else {
+        document.getElementById('authPinInput')?.focus();
+      }
+    }, 100);
+  }
+
+  static openModalAuth() {
+    const modalBackdrop = document.getElementById('modalAuthBackdrop');
+    const errorMsg = document.getElementById('authErrorMsg');
+    const loadingHint = document.getElementById('authLoadingHint');
+    const submitBtn = document.getElementById('authSubmitBtn');
+
+    if (errorMsg) errorMsg.style.display = 'none';
+    if (loadingHint) loadingHint.style.display = 'none';
+    if (submitBtn) submitBtn.disabled = false;
+    const pinInput = document.getElementById('authPinInput');
     if (pinInput) pinInput.value = '';
+    const emailInput = document.getElementById('authEmailInput');
+    if (emailInput) emailInput.value = '';
+    const passInput = document.getElementById('authPasswordInput');
+    if (passInput) passInput.value = '';
+
+    const supabaseEnabled = !!window.SupabaseClient?.isEnabled?.();
+    this.switchAuthMode(supabaseEnabled ? 'cloud' : 'local');
+
     if (modalBackdrop) modalBackdrop.classList.add('active');
-    setTimeout(() => pinInput?.focus(), 150);
   }
 
   static closeModalAuth() {
@@ -280,29 +344,74 @@ class AppController {
     if (modalBackdrop) modalBackdrop.classList.remove('active');
   }
 
-  static handleAuthLoginSubmit() {
-    const pinInput = document.getElementById('authPinInput');
+  static async handleAuthLoginSubmit() {
     const errorMsg = document.getElementById('authErrorMsg');
-    const pinValue = pinInput?.value || '';
+    const loadingHint = document.getElementById('authLoadingHint');
+    const submitBtn = document.getElementById('authSubmitBtn');
+    if (errorMsg) errorMsg.style.display = 'none';
+    if (loadingHint) loadingHint.style.display = 'block';
+    if (submitBtn) submitBtn.disabled = true;
 
-    if (AuthManager.login(pinValue)) {
-      this.closeModalAuth();
-      this.updateAuthUI();
-      this.showToast('🔓 Autenticado como Administrador com sucesso!');
-    } else {
-      if (errorMsg) errorMsg.style.display = 'block';
+    try {
+      if (this._authMode === 'cloud') {
+        const email = (document.getElementById('authEmailInput')?.value || '').trim();
+        const password = document.getElementById('authPasswordInput')?.value || '';
+        if (!email || !password) {
+          if (errorMsg) { errorMsg.textContent = '❌ Informe email e senha.'; errorMsg.style.display = 'block'; }
+          return;
+        }
+        const resp = await AuthManager.signInCloud({ email, password });
+        if (resp?.error) {
+          const msg = resp.error.message || 'Credenciais inválidas.';
+          if (errorMsg) { errorMsg.textContent = '❌ ' + msg; errorMsg.style.display = 'block'; }
+          this.showToast('Falha no login: ' + msg);
+          return;
+        }
+        const userId = AuthManager.getCurrentUserId();
+        const existingProp = StorageManager.getPropertyInfo();
+        if (existingProp && (!existingProp.user_id || existingProp.user_id === 'local-user-admin')) {
+          StorageManager.savePropertyInfo({ user_id: userId }, true);
+        }
+        this.closeModalAuth();
+        this.updateAuthUI();
+        this.showToast('🔓 Autenticado na nuvem com sucesso!');
+        setTimeout(() => SupabaseSync.processQueue(), 500);
+      } else {
+        const pinInput = document.getElementById('authPinInput');
+        const pinValue = pinInput?.value || '';
+        if (AuthManager.login(pinValue)) {
+          this.closeModalAuth();
+          this.updateAuthUI();
+          this.showToast('🔓 Autenticado como Administrador com sucesso!');
+          setTimeout(() => SupabaseSync.processQueue(), 500);
+        } else {
+          if (errorMsg) { errorMsg.textContent = '❌ Senha incorreta! Tente novamente.'; errorMsg.style.display = 'block'; }
+        }
+      }
+    } catch (err) {
+      if (errorMsg) { errorMsg.textContent = '❌ ' + (err.message || 'Erro interno.'); errorMsg.style.display = 'block'; }
+      console.warn('[Auth] Erro no login:', err);
+    } finally {
+      if (loadingHint) loadingHint.style.display = 'none';
+      if (submitBtn) submitBtn.disabled = false;
     }
   }
 
   static updateAuthUI() {
     const isAuth = AuthManager.isAuthenticated();
+    const isCloud = AuthManager._hasSupabaseSessionSync();
+    const userEmail = isCloud ? (AuthManager.getCurrentUserEmail() || '') : '';
+
     const btnAuthToggle = document.getElementById('btnAuthToggle');
     const btnDrawerAuthToggle = document.getElementById('btnDrawerAuthToggle');
     const headerBadge = document.getElementById('headerSessionBadge');
     const drawerBadge = document.getElementById('drawerSessionBadge');
 
+    const btnLabel = isAuth
+      ? (isCloud && userEmail ? '🔓 ' + userEmail.split('@')[0] + ' (Sair)' : '🔓 Admin (Sair)')
+      : '🔑 Entrar';
     if (btnAuthToggle) {
-      btnAuthToggle.textContent = isAuth ? '🔓 Admin (Sair)' : '🔑 Entrar';
+      btnAuthToggle.textContent = btnLabel;
       btnAuthToggle.className = isAuth ? 'btn btn-primary btn-sm no-print' : 'btn btn-outline btn-sm no-print';
     }
     if (btnDrawerAuthToggle) {
@@ -311,15 +420,19 @@ class AppController {
       textEls.forEach(el => el.remove());
       if (iconEl) iconEl.textContent = isAuth ? '🔓' : '🔑';
       const labelSpan = document.createElement('span');
-      labelSpan.textContent = isAuth ? 'Admin (Sair)' : 'Entrar como Admin';
+      labelSpan.textContent = isAuth
+        ? (isCloud && userEmail ? userEmail.split('@')[0] + ' (Sair)' : 'Admin (Sair)')
+        : 'Entrar como Admin';
       btnDrawerAuthToggle.appendChild(labelSpan);
       btnDrawerAuthToggle.classList.toggle('drawer-action-auth', !isAuth);
-      btnDrawerAuthToggle.style.borderColor = isAuth ? 'rgba(16, 185, 129, 0.3)' : '';
-      btnDrawerAuthToggle.style.background = isAuth ? 'rgba(16, 185, 129, 0.08)' : '';
+      btnDrawerAuthToggle.style.borderColor = isAuth ? (isCloud ? 'rgba(59,130,246,0.4)' : 'rgba(16,185,129,0.3)') : '';
+      btnDrawerAuthToggle.style.background = isAuth ? (isCloud ? 'rgba(59,130,246,0.08)' : 'rgba(16,185,129,0.08)') : '';
     }
 
     const badgeClass = isAuth ? 'badge badge-pago' : 'badge badge-pendente';
-    const badgeText = isAuth ? '🔓 Administrador' : '🔒 Visitante';
+    let badgeText = isAuth ? '🔓 Administrador' : '🔒 Visitante';
+    if (isAuth && isCloud) badgeText = '☁️ Admin (Nuvem)';
+    if (isAuth && isCloud && userEmail) badgeText = '☁️ ' + userEmail;
 
     if (headerBadge) {
       headerBadge.className = `badge ${badgeClass}`;
