@@ -13,7 +13,7 @@ const STORAGE_KEY_RECEIPTS = 'reformaplus_receipts_v2';
 
 // Dados Iniciais de Exemplo (Seed Data para teste rápido de Flip Imobiliário)
 const DEFAULT_PROPERTY = {
-  id: 'default-property-id-' + Math.random().toString(36).slice(2, 10),
+  id: null,
   user_id: null,
   title: 'Casa Residencial Jardim das Flores',
   cep: '04538-133',
@@ -144,7 +144,8 @@ class StorageManager {
   // Inicialização e carregamento padrão
   static initStorage() {
     if (!localStorage.getItem(STORAGE_KEY_PROPERTY)) {
-      localStorage.setItem(STORAGE_KEY_PROPERTY, JSON.stringify(DEFAULT_PROPERTY));
+      const seed = { ...DEFAULT_PROPERTY, id: StorageManager._guid() };
+      localStorage.setItem(STORAGE_KEY_PROPERTY, JSON.stringify(seed));
     }
     if (!localStorage.getItem(STORAGE_KEY_EXPENSES)) {
       localStorage.setItem(STORAGE_KEY_EXPENSES, JSON.stringify(DEFAULT_EXPENSES));
@@ -173,13 +174,20 @@ class StorageManager {
     }
   }
 
+  static _isValidUuid(val) {
+    if (!val || typeof val !== 'string') return false;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
+  }
+
   static _withMeta(obj, entityId) {
     const now = new Date().toISOString();
     let userId = null;
     try { if (window.SupabaseClient?.auth?.getUserIdSync) userId = window.SupabaseClient.auth.getUserIdSync(); } catch (_) { }
+    const currentIdIsValid = StorageManager._isValidUuid(obj?.id);
+    const fallbackId = StorageManager._isValidUuid(entityId) ? entityId : null;
     return {
       ...obj,
-      id: obj.id || entityId || StorageManager._guid(),
+      id: currentIdIsValid ? obj.id : (fallbackId || StorageManager._guid()),
       user_id: obj.user_id || userId || null,
       created_at: obj.created_at || now,
       updated_at: now,

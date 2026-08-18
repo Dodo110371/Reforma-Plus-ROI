@@ -159,12 +159,109 @@
     return out;
   }
 
+  function _normalizeProjectStagesPayload(payload) {
+    if (!payload || typeof payload !== 'object') return payload;
+    const out = {};
+    if (payload.id !== undefined) out.id = payload.id;
+    if (payload.property_id !== undefined) out.property_id = payload.property_id;
+    if (payload.user_id !== undefined) out.user_id = payload.user_id;
+    if (payload.name !== undefined) out.name = payload.name;
+    if (payload.order !== undefined) out.stage_order = payload.order;
+    else if (payload.stage_order !== undefined) out.stage_order = payload.stage_order;
+    if (payload.status !== undefined) out.status = payload.status;
+    if (payload.physicalPct !== undefined) out.physical_pct = payload.physicalPct;
+    else if (payload.physical_pct !== undefined) out.physical_pct = payload.physical_pct;
+    if (payload.financialPct !== undefined) out.financial_pct = payload.financialPct;
+    else if (payload.financial_pct !== undefined) out.financial_pct = payload.financial_pct;
+    if (payload.budgetAmount !== undefined) out.budget_amount = payload.budgetAmount;
+    else if (payload.budget_amount !== undefined) out.budget_amount = payload.budget_amount;
+    if (payload.spentAmount !== undefined) out.spent_amount = payload.spentAmount;
+    else if (payload.spent_amount !== undefined) out.spent_amount = payload.spent_amount;
+    if (payload.startDate !== undefined) out.start_date = payload.startDate;
+    else if (payload.start_date !== undefined) out.start_date = payload.start_date;
+    if (payload.endDate !== undefined) out.end_date = payload.endDate;
+    else if (payload.end_date !== undefined) out.end_date = payload.end_date;
+    if (payload.notes !== undefined) out.notes = payload.notes;
+    if (payload.created_at !== undefined) out.created_at = payload.created_at;
+    if (payload.updated_at !== undefined) out.updated_at = payload.updated_at;
+    return out;
+  }
+
+  function _normalizeTransactionsPayload(payload) {
+    if (!payload || typeof payload !== 'object') return payload;
+    const out = {};
+    if (payload.id !== undefined) out.id = payload.id;
+    if (payload.property_id !== undefined) out.property_id = payload.property_id;
+    if (payload.user_id !== undefined) out.user_id = payload.user_id;
+    if (payload.type !== undefined) out.tx_type = payload.type;
+    else if (payload.tx_type !== undefined) out.tx_type = payload.tx_type;
+    if (payload.category !== undefined) out.category = payload.category;
+    if (payload.subcategory !== undefined) out.subcategory = payload.subcategory;
+    if (payload.environment !== undefined) out.environment = payload.environment;
+    if (payload.description !== undefined) out.description = payload.description;
+    if (payload.amount !== undefined) out.amount = Number(payload.amount);
+    if (payload.quantity !== undefined) out.quantity = Number(payload.quantity);
+    if (payload.unitPrice !== undefined) out.unit_price = payload.unitPrice;
+    else if (payload.unit_price !== undefined) out.unit_price = payload.unit_price;
+    if (payload.supplier !== undefined) out.supplier = payload.supplier;
+    if (payload.documentNumber !== undefined) out.document_number = payload.documentNumber;
+    else if (payload.document_number !== undefined) out.document_number = payload.document_number;
+    if (payload.paymentMethod !== undefined) out.payment_method = payload.paymentMethod;
+    else if (payload.payment_method !== undefined) out.payment_method = payload.payment_method;
+    if (payload.paymentStatus !== undefined) out.payment_status = payload.paymentStatus;
+    else if (payload.payment_status !== undefined) out.payment_status = payload.payment_status;
+    if (payload.date !== undefined) out.tx_date = payload.date;
+    else if (payload.tx_date !== undefined) out.tx_date = payload.tx_date;
+    if (payload.dueDate !== undefined) out.due_date = payload.dueDate;
+    else if (payload.due_date !== undefined) out.due_date = payload.due_date;
+    if (payload.stageId !== undefined) out.stage_id = payload.stageId;
+    else if (payload.stage_id !== undefined) out.stage_id = payload.stage_id;
+    if (payload.notes !== undefined) out.notes = payload.notes;
+    if (payload.created_at !== undefined) out.created_at = payload.created_at;
+    if (payload.updated_at !== undefined) out.updated_at = payload.updated_at;
+    return out;
+  }
+
+  function _normalizeTransactionReceiptsPayload(payload) {
+    if (!payload || typeof payload !== 'object') return payload;
+    const out = {};
+    if (payload.id !== undefined) out.id = payload.id;
+    if (payload.transaction_id !== undefined) out.transaction_id = payload.transaction_id;
+    if (payload.txId !== undefined && !out.transaction_id) out.transaction_id = payload.txId;
+    if (payload.user_id !== undefined) out.user_id = payload.user_id;
+    if (payload.storage_path !== undefined) out.storage_path = payload.storage_path;
+    else if (payload.path !== undefined) out.storage_path = payload.path;
+    if (payload.original_filename !== undefined) out.original_filename = payload.original_filename;
+    else if (payload.originalFilename !== undefined) out.original_filename = payload.originalFilename;
+    if (payload.mime_type !== undefined) out.mime_type = payload.mime_type;
+    else if (payload.mimeType !== undefined) out.mime_type = payload.mimeType;
+    if (payload.size_bytes !== undefined) out.size_bytes = Number(payload.size_bytes);
+    else if (payload.sizeBytes !== undefined) out.size_bytes = Number(payload.sizeBytes);
+    if (payload.is_primary !== undefined) out.is_primary = !!payload.is_primary;
+    else if (payload.isPrimary !== undefined) out.is_primary = !!payload.isPrimary;
+    if (payload.signed_url !== undefined) out.signed_url = payload.signed_url;
+    if (payload.full_path !== undefined) out.full_path = payload.full_path;
+    if (payload.created_at !== undefined) out.created_at = payload.created_at;
+    if (payload.updated_at !== undefined) out.updated_at = payload.updated_at;
+    return out;
+  }
+
+  function _normalizePayloadForEntity(entity, payload) {
+    switch (entity) {
+      case 'properties': return _normalizePropertiesPayload(payload);
+      case 'project_stages': return _normalizeProjectStagesPayload(payload);
+      case 'transactions': return _normalizeTransactionsPayload(payload);
+      case 'transaction_receipts': return _normalizeTransactionReceiptsPayload(payload);
+      default: return payload;
+    }
+  }
+
   async function _dispatchOne(client, user, op) {
     const { entity, op: verb, payload } = op;
     let withUser = { ...payload, user_id: payload.user_id || user.id };
 
-    if (entity === 'properties' && verb !== 'delete') {
-      withUser = _normalizePropertiesPayload(withUser);
+    if (verb !== 'delete') {
+      withUser = _normalizePayloadForEntity(entity, withUser);
     }
 
     switch (entity) {
@@ -189,12 +286,10 @@
     }
     if (resp?.error) {
       if (verb === 'insert' && resp.error?.code === '23505') {
-        const fallbackPayload = table === 'properties' ? _normalizePropertiesPayload(payload) : payload;
+        const fallbackPayload = _normalizePayloadForEntity(table, payload);
         return client.from(table).update(fallbackPayload).eq('id', payload.id).then(r => r.error && Promise.reject(r.error));
       }
-      if (table === 'properties') {
-        console.warn(`[Sync] Falha em properties.${verb} (id=${id || payload.id || 'n/a'}): ${resp.error?.message || 'sem detalhe'}`);
-      }
+      console.warn(`[Sync] Falha em ${table}.${verb} (id=${id || payload.id || 'n/a'}): ${resp.error?.message || 'sem detalhe'} (code=${resp.error?.code || 'n/a'})`);
       throw new Error(resp.error.message || `Erro ${table}/${verb}`);
     }
     return resp?.data || null;
