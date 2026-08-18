@@ -130,9 +130,42 @@
     }
   }
 
+  function _normalizePropertiesPayload(payload) {
+    if (!payload || typeof payload !== 'object') return payload;
+    const out = {};
+    if (payload.id !== undefined) out.id = payload.id;
+    if (payload.user_id !== undefined) out.user_id = payload.user_id;
+    if (payload.title !== undefined) out.title = payload.title;
+    if (payload.cep !== undefined) out.cep = payload.cep;
+    if (payload.street !== undefined) out.street = payload.street;
+    if (payload.number !== undefined) out.number = payload.number;
+    if (payload.complement !== undefined) out.complement = payload.complement;
+    if (payload.neighborhood !== undefined) out.neighborhood = payload.neighborhood;
+    if (payload.city !== undefined) out.city = payload.city;
+    if (payload.state !== undefined) out.state = payload.state;
+    if (payload.purchasePrice !== undefined) out.purchase_price = payload.purchasePrice;
+    else if (payload.purchase_price !== undefined) out.purchase_price = payload.purchase_price;
+    if (payload.estimatedResalePrice !== undefined) out.estimated_resale_price = payload.estimatedResalePrice;
+    else if (payload.estimated_resale_price !== undefined) out.estimated_resale_price = payload.estimated_resale_price;
+    if (payload.arvNote !== undefined) out.arv_note = payload.arvNote;
+    else if (payload.arv_note !== undefined) out.arv_note = payload.arv_note;
+    if (payload.holdingCosts !== undefined) out.holding_costs = payload.holdingCosts;
+    else if (payload.holding_costs !== undefined) out.holding_costs = payload.holding_costs;
+    if (payload.targetDurationMonths !== undefined) out.target_duration_months = payload.targetDurationMonths;
+    else if (payload.target_duration_months !== undefined) out.target_duration_months = payload.target_duration_months;
+    if (payload.notes !== undefined) out.notes = payload.notes;
+    if (payload.created_at !== undefined) out.created_at = payload.created_at;
+    if (payload.updated_at !== undefined) out.updated_at = payload.updated_at;
+    return out;
+  }
+
   async function _dispatchOne(client, user, op) {
     const { entity, op: verb, payload } = op;
-    const withUser = { ...payload, user_id: payload.user_id || user.id };
+    let withUser = { ...payload, user_id: payload.user_id || user.id };
+
+    if (entity === 'properties' && verb !== 'delete') {
+      withUser = _normalizePropertiesPayload(withUser);
+    }
 
     switch (entity) {
       case 'properties': return _runCrud(client, 'properties', verb, withUser, payload.id);
@@ -155,9 +188,12 @@
       throw new Error('op desconhecida: ' + verb);
     }
     if (resp?.error) {
-      // "23505 unique violation" em insert ao repetir -> aceitar como sucesso
       if (verb === 'insert' && resp.error?.code === '23505') {
-        return client.from(table).update(payload).eq('id', payload.id).then(r => r.error && Promise.reject(r.error));
+        const fallbackPayload = table === 'properties' ? _normalizePropertiesPayload(payload) : payload;
+        return client.from(table).update(fallbackPayload).eq('id', payload.id).then(r => r.error && Promise.reject(r.error));
+      }
+      if (table === 'properties') {
+        console.warn(`[Sync] Falha em properties.${verb} (id=${id || payload.id || 'n/a'}): ${resp.error?.message || 'sem detalhe'}`);
       }
       throw new Error(resp.error.message || `Erro ${table}/${verb}`);
     }
