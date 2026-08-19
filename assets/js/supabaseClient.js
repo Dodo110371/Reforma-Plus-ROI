@@ -37,6 +37,7 @@
   const LOCAL_ONLY = readVal('VITE_LOCAL_ONLY') === 'true';
   const BUCKET = readVal('VITE_SUPABASE_BUCKET_RECEIPTS') || 'receipts';
 
+  const LOCAL_CACHE_KEY = 'reformaplus_cloud_user_cache_v1';
   const state = {
     enabled: false,
     client: null,
@@ -45,6 +46,30 @@
     bucket: BUCKET,
     lastSessionCheck: 0,
   };
+
+  function _cacheCloudUser(user) {
+    try {
+      if (!user) { localStorage.removeItem(LOCAL_CACHE_KEY); return; }
+      localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify({
+        id: user.id,
+        email: user.email || user.user_metadata?.email || null,
+        phone: user.phone || null,
+        cachedAt: Date.now(),
+      }));
+    } catch (_) { }
+  }
+  function _clearCloudUserCache() {
+    try { localStorage.removeItem(LOCAL_CACHE_KEY); } catch (_) { }
+  }
+  function _getCachedCloudUser() {
+    try {
+      const raw = localStorage.getItem(LOCAL_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || !parsed.id) return null;
+      return parsed;
+    } catch (_) { return null; }
+  }
 
   function _bootClient() {
     if (state.enabled) return state.client;
@@ -72,7 +97,7 @@
       state.enabled = true;
       state.url = SUPABASE_URL;
       state.anonKey = SUPABASE_ANON_KEY.slice(0, 12) + '...[truncated]';
-      console.info(`[Supabase] Cliente inicializado (${SUPABASE_URL.replace('https://','')}).`);
+      console.info(`[Supabase] Cliente inicializado (${SUPABASE_URL.replace('https://', '')}).`);
       return state.client;
     } catch (e) {
       console.error('[Supabase] Falha ao criar cliente:', e);
@@ -115,6 +140,10 @@
     /**
      * Helpers Auth: sessão atual, user_id, login/logout/signup.
      * Todos tolerantes a `null` (caso Supabase não inicializado).
+     *
+     * Cache 100% CONFIÁVEL em localStorage próprio (reformaplus_cloud_user_cache_v1).
+     * Não tentamos mais adivinhar chaves internas do SDK Supabase (sb-*-auth-token),
+     * pois elas variam conforme versão/storageKey e causavam falsos "Visitante".
      */
     auth: {
       async getSession() {
@@ -122,7 +151,9 @@
         if (!c) return { session: null, user: null };
         const { data, error } = await c.auth.getSession();
         if (error) return { session: null, user: null, error };
-        return { session: data.session, user: data.session?.user || null };
+        const user = data.session?.user || null;
+        if (user) _cacheCloudUser(user); else _clearCloudUserCache();
+        return { session: data.session, user };
       },
 
       async getUser() {
@@ -130,28 +161,37 @@
         return user;
       },
 
+      getCachedUserSync() {
+        return _getCachedCloudUser();
+      },
+
       getUserIdSync() {
-        try {
-          const raw = localStorage.getItem('sb-' + new URL(state.url || 'http://x').hostname.replace(/\./g,'-') + '-auth-token');
-          if (!raw) return null;
-          const parsed = JSON.parse(raw);
-          return parsed?.user?.id || null;
-        } catch (_) { return null; }
+        const cached = _getCachedCloudUser();
+        return cached?.id || null;
+      },
+
+      getUserEmailSync() {
+        const cached = _getCachedCloudUser();
+        return cached?.email || null;
       },
 
       async signUp({ email, password, fullName }) {
         const c = _bootClient();
         if (!c) return { error: new Error('Supabase não inicializado') };
-        return c.auth.signUp({
+        const resp = await c.auth.signUp({
           email, password,
           options: { data: { full_name: fullName || email } },
         });
+        if (resp?.data?.user) _cacheCloudUser(resp.data.user);
+        return resp;
       },
 
       async signIn({ email, password }) {
         const c = _bootClient();
         if (!c) return { error: new Error('Supabase não inicializado') };
-        return c.auth.signInWithPassword({ email, password });
+        const resp = await c.auth.signInWithPassword({ email, password });
+        if (resp?.data?.user) _cacheCloudUser(resp.data.user);
+        return resp;
       },
 
       async signInWithMagicLink({ email }) {
@@ -161,16 +201,27 @@
       },
 
       async signOut() {
+        _clearCloudUserCache();
         const c = _bootClient();
         if (!c) return null;
-        return c.auth.signOut();
+        try {
+          return await c.auth.signOut();
+        } finally {
+          _clearCloudUserCache();
+        }
       },
 
       onChange(callback) {
         const c = _bootClient();
-        if (!c || !callback) return () => {};
-        const { data } = c.auth.onAuthStateChange((evt, sess) => callback(evt, sess));
-        return data?.subscription?.unsubscribe ? () => data.subscription.unsubscribe() : () => {};
+        if (!c || !callback) return () => { };
+        const { data } = c.auth.onAuthStateChange((evt, sess) => {
+          try {
+            if (evt === 'SIGNED_IN' && sess?.user) _cacheCloudUser(sess.user);
+            if (evt === 'SIGNED_OUT') _clearCloudUserCache();
+          } catch (_) { }
+          callback(evt, sess);
+        });
+        return data?.subscription?.unsubscribe ? () => data.subscription.unsubscribe() : () => { };
       },
     },
 
@@ -183,8 +234,8 @@
         if (!(file instanceof Blob)) throw new Error('arquivo inválido');
 
         const safeFolder = folder
-          ? String(folder).replace(/[^0-9a-zA-Z_\-]/g,'').slice(0, 16)
-          : new Date().toISOString().slice(0,7); /* yyyy-mm */
+          ? String(folder).replace(/[^0-9a-zA-Z_\-]/g, '').slice(0, 16)
+          : new Date().toISOString().slice(0, 7); /* yyyy-mm */
         const ext = (file.name || 'bin').split('.').pop() || 'bin';
         const safeName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
         const path = `${user_id}/${safeFolder}/${safeName}`;

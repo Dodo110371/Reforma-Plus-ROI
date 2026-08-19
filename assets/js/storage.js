@@ -510,7 +510,9 @@ class AuthManager {
   static _hasSupabaseSessionSync() {
     try {
       if (!window.SupabaseClient || !window.SupabaseClient.isEnabled()) return false;
-      return !!window.SupabaseClient.auth.getUserIdSync();
+      const cachedId = window.SupabaseClient.auth.getUserIdSync();
+      if (cachedId) return true;
+      return false;
     } catch (_) { return false; }
   }
 
@@ -523,8 +525,10 @@ class AuthManager {
 
   static getCurrentUserEmail() {
     try {
-      const raw = localStorage.getItem('sb-' + new URL(window.SupabaseClient?.debug?.().url || 'http://x').hostname.replace(/\./g, '-') + '-auth-token');
-      if (raw) return JSON.parse(raw)?.user?.email || null;
+      if (window.SupabaseClient?.isEnabled?.()) {
+        const cached = window.SupabaseClient.auth.getUserEmailSync();
+        if (cached) return cached;
+      }
     } catch (_) { }
     return null;
   }
@@ -560,7 +564,11 @@ class AuthManager {
     if (!window.SupabaseClient || !window.SupabaseClient.isEnabled()) {
       return { error: new Error('Supabase não configurado.') };
     }
-    return window.SupabaseClient.auth.signIn({ email, password });
+    const resp = await window.SupabaseClient.auth.signIn({ email, password });
+    if (!resp?.error && resp?.data?.user) {
+      sessionStorage.setItem(SESSION_KEY_IS_AUTH, 'true');
+    }
+    return resp;
   }
 
   static async signInCloudMagic(email) {

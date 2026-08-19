@@ -17,8 +17,8 @@ class AppController {
     StorageManager.initStorage();
     AuthManager.initAuth();
 
-    if (window.SupabaseClient?.onChange) {
-      window.SupabaseClient.onChange((evt, session) => {
+    if (window.SupabaseClient?.auth?.onChange) {
+      window.SupabaseClient.auth.onChange((evt, session) => {
         if (evt === 'SIGNED_IN' && session?.user) {
           const userId = session.user.id;
           const existingProp = StorageManager.getPropertyInfo();
