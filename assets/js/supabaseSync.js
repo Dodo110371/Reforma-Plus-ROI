@@ -78,7 +78,7 @@
       console.warn('[Sync] payload.id obrigatório, ignorando:', entity, op);
       return;
     }
-    queue.push({
+    const item = {
       id: _guid(),
       entity, op,
       payload: JSON.parse(JSON.stringify(payload)),
@@ -87,8 +87,10 @@
       error_message: null,
       retries: 0,
       created_at: new Date().toISOString(),
-    });
+    };
+    queue.push(item);
     _persistQueue();
+    console.info(`[Sync] Enfileirado ${entity}.${op} (payload.id=${payload.id} | queue_item=${item.id}). Pendentes: ${pendingCount()}`);
     scheduleProcess();
   }
 
@@ -99,16 +101,34 @@
   }
 
   async function processQueue() {
-    if (processing) return;
-    if (!window.SupabaseClient || !window.SupabaseClient.isEnabled()) return;
-    if (queue.length === 0) return;
+    if (processing) {
+      console.debug('[Sync] processQueue ignorado: já está processando.');
+      return;
+    }
+    if (!window.SupabaseClient || !window.SupabaseClient.isEnabled()) {
+      console.info('[Sync] processQueue PARADO: cliente Supabase NÃO inicializado/habilitado.');
+      return;
+    }
+    if (queue.length === 0) {
+      console.debug('[Sync] processQueue PARADO: fila vazia (nada a sincronizar).');
+      return;
+    }
     const user = await window.SupabaseClient.auth.getUser();
-    if (!user) return;
-
+    if (!user) {
+      console.warn('[Sync] processQueue PARADO: sem sessão válida de usuário na nuvem (auth.getUser() retornou null).');
+      return;
+    }
+    const toProcess = queue.filter(o => !o.synced);
+    if (toProcess.length === 0) {
+      console.debug('[Sync] processQueue PARADO: todas as operações já foram sincronizadas.');
+      return;
+    }
     processing = true;
+    console.info(`[Sync] ▶️ Iniciando sincronia: ${toProcess.length} operação(ões) pendente(s) | user_id=${user.id}`);
     try {
       const client = window.SupabaseClient.getClient();
-      const toProcess = queue.filter(o => !o.synced);
+      let okCount = 0;
+      let failCount = 0;
 
       for (const op of toProcess) {
         try {
@@ -117,14 +137,19 @@
           op.errored = false;
           op.error_message = null;
           op.synced_at = new Date().toISOString();
+          okCount++;
         } catch (err) {
           op.retries = (op.retries || 0) + 1;
           op.errored = true;
           op.error_message = String(err?.message || err).slice(0, 400);
-          console.warn(`[Sync] Falha em ${op.entity}.${op.op} (tentativa ${op.retries}):`, err);
+          failCount++;
+          console.warn(`[Sync] ❌ Falha em ${op.entity}.${op.op} (tentativa ${op.retries}/${MAX_RETRIES}) — msg: ${err?.message || err}`);
         }
       }
+      console.info(`[Sync] ✅ Sincronia finalizada. Sucesso: ${okCount} | Falhas: ${failCount} | Restantes (erro + retry): ${pendingCount()}`);
       _persistQueue();
+    } catch (topErr) {
+      console.error('[Sync] ⛔ Erro CRÍTICO em processQueue:', topErr);
     } finally {
       processing = false;
     }
@@ -135,25 +160,57 @@
     const out = {};
     if (payload.id !== undefined) out.id = payload.id;
     if (payload.user_id !== undefined) out.user_id = payload.user_id;
-    if (payload.title !== undefined) out.title = payload.title;
-    if (payload.cep !== undefined) out.cep = payload.cep;
-    if (payload.street !== undefined) out.street = payload.street;
-    if (payload.number !== undefined) out.number = payload.number;
-    if (payload.complement !== undefined) out.complement = payload.complement;
-    if (payload.neighborhood !== undefined) out.neighborhood = payload.neighborhood;
-    if (payload.city !== undefined) out.city = payload.city;
-    if (payload.state !== undefined) out.state = payload.state;
-    if (payload.purchasePrice !== undefined) out.purchase_price = payload.purchasePrice;
-    else if (payload.purchase_price !== undefined) out.purchase_price = payload.purchase_price;
-    if (payload.estimatedResalePrice !== undefined) out.estimated_resale_price = payload.estimatedResalePrice;
-    else if (payload.estimated_resale_price !== undefined) out.estimated_resale_price = payload.estimated_resale_price;
-    if (payload.arvNote !== undefined) out.arv_note = payload.arvNote;
-    else if (payload.arv_note !== undefined) out.arv_note = payload.arv_note;
-    if (payload.holdingCosts !== undefined) out.holding_costs = payload.holdingCosts;
-    else if (payload.holding_costs !== undefined) out.holding_costs = payload.holding_costs;
-    if (payload.targetDurationMonths !== undefined) out.target_duration_months = payload.targetDurationMonths;
-    else if (payload.target_duration_months !== undefined) out.target_duration_months = payload.target_duration_months;
-    if (payload.notes !== undefined) out.notes = payload.notes;
+    if (payload.title !== undefined) out.title = payload.title == null ? null : String(payload.title).slice(0, 255);
+    if (payload.cep !== undefined) out.cep = payload.cep == null ? null : String(payload.cep).replace(/\D/g, '').slice(0, 9);
+    if (payload.street !== undefined) out.street = payload.street == null ? null : String(payload.street).slice(0, 255);
+    if (payload.number !== undefined) out.number = payload.number == null ? null : String(payload.number).slice(0, 32);
+    if (payload.complement !== undefined) out.complement = payload.complement == null ? null : String(payload.complement).slice(0, 255);
+    if (payload.neighborhood !== undefined) out.neighborhood = payload.neighborhood == null ? null : String(payload.neighborhood).slice(0, 255);
+    if (payload.city !== undefined) out.city = payload.city == null ? null : String(payload.city).slice(0, 255);
+    if (payload.state !== undefined) {
+      let raw = String(payload.state == null ? '' : payload.state).trim().toUpperCase();
+      if (raw.length > 2) {
+        const MAP_UF = {
+          'ACRE': 'AC', 'ALAGOAS': 'AL', 'AMAPA': 'AP', 'AMAPÁ': 'AP', 'AMAZONAS': 'AM', 'BAHIA': 'BA', 'CEARA': 'CE', 'CEARÁ': 'CE',
+          'DISTRITO FEDERAL': 'DF', 'ESPIRITO SANTO': 'ES', 'ESPÍRITO SANTO': 'ES', 'GOIAS': 'GO', 'GOIÁS': 'GO', 'MARANHAO': 'MA', 'MARANHÃO': 'MA',
+          'MATO GROSSO': 'MT', 'MATO GROSSO DO SUL': 'MS', 'MINAS GERAIS': 'MG', 'PARA': 'PA', 'PARÁ': 'PA', 'PARAIBA': 'PB', 'PARAÍBA': 'PB',
+          'PARANA': 'PR', 'PARANÁ': 'PR', 'PERNAMBUCO': 'PE', 'PIAUI': 'PI', 'PIAUÍ': 'PI', 'RIO DE JANEIRO': 'RJ', 'RIO GRANDE DO NORTE': 'RN',
+          'RIO GRANDE DO SUL': 'RS', 'RONDONIA': 'RO', 'RONDÔNIA': 'RO', 'RORAIMA': 'RR', 'SANTA CATARINA': 'SC', 'SAO PAULO': 'SP', 'SÃO PAULO': 'SP',
+          'SERGIPE': 'SE', 'TOCANTINS': 'TO',
+        };
+        const key = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z\s]/g, '').trim();
+        raw = MAP_UF[key] || MAP_UF[raw] || raw.replace(/[^A-Z]/g, '').slice(0, 2);
+      }
+      if (raw.length > 2) raw = raw.slice(0, 2);
+      if (raw.length === 1) raw = raw + ' ';
+      out.state = raw || null;
+    }
+    if (payload.purchasePrice !== undefined || payload.purchase_price !== undefined) {
+      const raw = payload.purchasePrice !== undefined ? payload.purchasePrice : payload.purchase_price;
+      const n = raw == null || raw === '' ? null : Number(raw);
+      out.purchase_price = Number.isFinite(n) ? n : null;
+    }
+    if (payload.estimatedResalePrice !== undefined || payload.estimated_resale_price !== undefined) {
+      const raw = payload.estimatedResalePrice !== undefined ? payload.estimatedResalePrice : payload.estimated_resale_price;
+      const n = raw == null || raw === '' ? null : Number(raw);
+      out.estimated_resale_price = Number.isFinite(n) ? n : null;
+    }
+    if (payload.arvNote !== undefined || payload.arv_note !== undefined) {
+      const raw = payload.arvNote !== undefined ? payload.arvNote : payload.arv_note;
+      if (raw != null && String(raw).trim() !== '') out.arv_note = String(raw);
+    }
+    if (payload.holdingCosts !== undefined || payload.holding_costs !== undefined) {
+      const raw = payload.holdingCosts !== undefined ? payload.holdingCosts : payload.holding_costs;
+      const n = raw == null || raw === '' ? null : Number(raw);
+      out.holding_costs = Number.isFinite(n) ? n : null;
+    }
+    if (payload.targetDurationMonths !== undefined || payload.target_duration_months !== undefined) {
+      const raw = payload.targetDurationMonths !== undefined ? payload.targetDurationMonths : payload.target_duration_months;
+      const n = raw == null || raw === '' ? NaN : Number(raw);
+      if (Number.isFinite(n)) out.target_duration_months = Math.max(1, Math.round(n));
+      else out.target_duration_months = 4;
+    }
+    if (payload.notes !== undefined) out.notes = payload.notes == null ? null : String(payload.notes);
     if (payload.created_at !== undefined) out.created_at = payload.created_at;
     if (payload.updated_at !== undefined) out.updated_at = payload.updated_at;
     return out;
@@ -258,6 +315,7 @@
 
   async function _dispatchOne(client, user, op) {
     const { entity, op: verb, payload } = op;
+    console.debug(`[Sync]   ↪️ Executando ${entity}.${verb} (id=${payload.id})`);
     let withUser = { ...payload, user_id: payload.user_id || user.id };
 
     if (verb !== 'delete') {
@@ -275,21 +333,60 @@
 
   async function _runCrud(client, table, verb, payload, id) {
     let resp;
+    let rowsAffected = null;
     if (verb === 'insert') {
       resp = await client.from(table).insert(payload).select('id').maybeSingle();
+      rowsAffected = resp?.data ? 1 : 0;
+      if (!resp?.error && rowsAffected < 1) {
+        console.warn(`[Sync]   ⚠️ ${table}.insert não retornou id (talvez RLS/policy bloqueou write?) id=${payload.id}`);
+      } else if (!resp?.error) {
+        console.info(`[Sync]   ✅ ${table}.insert OK (novo id=${resp?.data?.id || payload.id}).`);
+      }
     } else if (verb === 'update') {
       resp = await client.from(table).update(payload).eq('id', id).select('id').maybeSingle();
+      rowsAffected = resp?.data ? 1 : 0;
+      if (!resp?.error && rowsAffected < 1) {
+        console.warn(`[Sync]   ⚠️ ${table}.update afetou 0 linhas (registro ainda não existe no cloud). Executando INSERT AUTOMÁTICO (upsert). id=${id}`);
+        const insertPayload = _normalizePayloadForEntity(table, payload);
+        const insResp = await client.from(table).insert(insertPayload).select('id').maybeSingle();
+        if (insResp?.error) {
+          if (insResp.error.code === '23505') {
+            const okResp = await client.from(table).update(insertPayload).eq('id', insertPayload.id).select('id').maybeSingle();
+            if (okResp?.error) throw new Error(okResp.error.message || `Erro fallback ${table}/update-pos-23505`);
+            console.info(`[Sync]   ✅ ${table}.upsert OK (23505 → update) id=${insertPayload.id}.`);
+            return okResp?.data || { id: insertPayload.id };
+          }
+          console.warn(`[Sync]   ❌ ${table}.insert (fallback do update 0 linhas) falhou. code=${insResp.error?.code} msg=${insResp.error?.message}`);
+          throw new Error(insResp.error.message || `Erro ${table}/upsert-via-update`);
+        }
+        console.info(`[Sync]   ✅ ${table}.upsert OK (via update→insert) id=${insResp?.data?.id || insertPayload.id}.`);
+        return insResp?.data || { id: insertPayload.id };
+      } else if (!resp?.error) {
+        console.info(`[Sync]   ✅ ${table}.update OK (id=${resp?.data?.id || id}).`);
+      }
     } else if (verb === 'delete') {
       resp = await client.from(table).delete().eq('id', id);
+      if (!resp?.error) {
+        console.info(`[Sync]   ✅ ${table}.delete OK (id=${id}).`);
+      }
     } else {
       throw new Error('op desconhecida: ' + verb);
     }
     if (resp?.error) {
       if (verb === 'insert' && resp.error?.code === '23505') {
         const fallbackPayload = _normalizePayloadForEntity(table, payload);
-        return client.from(table).update(fallbackPayload).eq('id', payload.id).then(r => r.error && Promise.reject(r.error));
+        const fbResp = await client.from(table).update(fallbackPayload).eq('id', payload.id).select('id').maybeSingle();
+        if (fbResp?.error) throw new Error(fbResp.error.message || `Erro fallback 23505 ${table}/update`);
+        console.info(`[Sync]   ✅ ${table}.23505 → update OK (id=${fbResp?.data?.id || payload.id}).`);
+        return fbResp?.data || { id: payload.id };
       }
-      console.warn(`[Sync] Falha em ${table}.${verb} (id=${id || payload.id || 'n/a'}): ${resp.error?.message || 'sem detalhe'} (code=${resp.error?.code || 'n/a'})`);
+      console.warn(
+        `[Sync]   ❌ ${table}.${verb} (id=${id || payload.id || 'n/a'}): ${resp.error?.message || 'sem detalhe'}`,
+        '\n     code:', resp.error?.code,
+        '\n     hint:', resp.error?.hint,
+        '\n     details:', resp.error?.details,
+        '\n     payload keys:', Object.keys(payload || {}),
+      );
       throw new Error(resp.error.message || `Erro ${table}/${verb}`);
     }
     return resp?.data || null;
@@ -329,12 +426,14 @@
     cloudSnapshotWrite(snap);
     const localOnly = await mergeCloudIntoLocal(snap, user.id);
 
-    return { ok: true, status: 'Pulled', counts: {
-      properties: snap.properties.length,
-      stages: snap.stages.length,
-      transactions: snap.transactions.length,
-      receipts: snap.receipts.length,
-    }, merged: localOnly };
+    return {
+      ok: true, status: 'Pulled', counts: {
+        properties: snap.properties.length,
+        stages: snap.stages.length,
+        transactions: snap.transactions.length,
+        receipts: snap.receipts.length,
+      }, merged: localOnly
+    };
   }
 
   async function mergeCloudIntoLocal(snap, user_id) {
@@ -415,9 +514,9 @@
   const SupabaseSync = {
     // ENFILEIRAR (StorageManager chama)
     enqueueProperty(op, payload) { enqueue('properties', op, payload); },
-    enqueueStage(op, payload)    { enqueue('project_stages', op, payload); },
-    enqueueTransaction(op, payload){ enqueue('transactions', op, payload); },
-    enqueueReceipt(op, payload)  { enqueue('transaction_receipts', op, payload); },
+    enqueueStage(op, payload) { enqueue('project_stages', op, payload); },
+    enqueueTransaction(op, payload) { enqueue('transactions', op, payload); },
+    enqueueReceipt(op, payload) { enqueue('transaction_receipts', op, payload); },
 
     // PROCESSAR
     scheduleProcess,
@@ -437,7 +536,7 @@
 
   // Boot: se está logado + internet, roda processQueue após 1.5s
   if (typeof window !== 'undefined') {
-    window.addEventListener('online',  () => scheduleProcess(500));
+    window.addEventListener('online', () => scheduleProcess(500));
     window.addEventListener('DOMContentLoaded', () => scheduleProcess(1500));
     window.addEventListener('supabase:ready', () => scheduleProcess(1500));
   }
