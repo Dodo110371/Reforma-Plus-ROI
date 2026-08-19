@@ -43,7 +43,7 @@
   <!-- Supabase JS SDK CDN - carregado NO FINAL DO BODY, antes de env.js/supabaseClient.js, SEM defer -->
 </head>
 
-<body data-theme="dark">
+<body data-theme="light">
 
   <!-- Header Superior -->
   <header class="app-header">
@@ -740,36 +740,38 @@
                 placeholder="ex: Leroy Merlin, Eletricista João" required>
             </div>
 
-            <div class="form-group">
-              <label class="form-label" for="expenseAmount">Valor Total (R$)</label>
-              <input type="number" step="0.01" id="expenseAmount" class="form-input" placeholder="0.00" required>
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label" for="expenseAmount">Valor Total (R$)</label>
+                <input type="text" id="expenseAmount" class="form-input" placeholder="Ex.: 1.234,56" required
+                  autocomplete="off">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="expenseStatus">Status de Pagamento</label>
+                <select id="expenseStatus" class="form-select" required>
+                  <option value="pago">Pago</option>
+                  <option value="pendente">Pendente / A Pagar</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="expenseReceiptInput">Anexar Comprovante / Recibo</label>
+                <input type="file" id="expenseReceiptInput" class="form-input" accept="image/*,.pdf">
+                <div id="receiptPreviewContainer"></div>
+              </div>
+
+              <div class="form-group full-width">
+                <label class="form-label" for="expenseDescription">Descrição / Observações</label>
+                <textarea id="expenseDescription" class="form-textarea"
+                  placeholder="Detalhes dos materiais comprados, especificações ou garantias..."></textarea>
+              </div>
             </div>
 
-            <div class="form-group">
-              <label class="form-label" for="expenseStatus">Status de Pagamento</label>
-              <select id="expenseStatus" class="form-select" required>
-                <option value="pago">Pago</option>
-                <option value="pendente">Pendente / A Pagar</option>
-              </select>
+            <div style="margin-top: 1.25rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
+              <button type="button" class="btn btn-outline" onclick="AppController.resetExpenseForm()">Limpar</button>
+              <button type="submit" id="btnSubmitExpense" class="btn btn-primary">Adicionar Lançamento</button>
             </div>
-
-            <div class="form-group">
-              <label class="form-label" for="expenseReceiptInput">Anexar Comprovante / Recibo</label>
-              <input type="file" id="expenseReceiptInput" class="form-input" accept="image/*,.pdf">
-              <div id="receiptPreviewContainer"></div>
-            </div>
-
-            <div class="form-group full-width">
-              <label class="form-label" for="expenseDescription">Descrição / Observações</label>
-              <textarea id="expenseDescription" class="form-textarea"
-                placeholder="Detalhes dos materiais comprados, especificações ou garantias..."></textarea>
-            </div>
-          </div>
-
-          <div style="margin-top: 1.25rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
-            <button type="button" class="btn btn-outline" onclick="AppController.resetExpenseForm()">Limpar</button>
-            <button type="submit" id="btnSubmitExpense" class="btn btn-primary">Adicionar Lançamento</button>
-          </div>
         </form>
       </div>
 
@@ -957,18 +959,20 @@
           <div class="form-grid">
             <div class="form-group">
               <label class="form-label" for="propPurchasePrice">Valor de Aquisição (R$)</label>
-              <input type="number" step="0.01" id="propPurchasePrice" class="form-input" required>
+              <input type="text" id="propPurchasePrice" class="form-input" placeholder="Ex.: 280.000,00" required
+                autocomplete="off">
             </div>
 
             <div class="form-group">
               <label class="form-label" for="propEstimatedResalePrice">Valor Estimado de Venda - ARV (R$)</label>
-              <input type="number" step="0.01" id="propEstimatedResalePrice" class="form-input" required>
+              <input type="text" id="propEstimatedResalePrice" class="form-input" placeholder="Ex.: 480.000,00" required
+                autocomplete="off">
             </div>
 
             <div class="form-group">
               <label class="form-label" for="propHoldingCosts">Custos Fixos / Holding (R$)</label>
-              <input type="number" step="0.01" id="propHoldingCosts" class="form-input"
-                placeholder="IPTU, energia, água, cartório...">
+              <input type="text" id="propHoldingCosts" class="form-input"
+                placeholder="Ex.: 12.500,00 (IPTU, energia, água, cartório...)" autocomplete="off">
             </div>
 
             <div class="form-group full-width">

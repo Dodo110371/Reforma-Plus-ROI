@@ -17,6 +17,8 @@ class AppController {
     StorageManager.initStorage();
     AuthManager.initAuth();
 
+    AppController.applySavedTheme();
+
     if (window.SupabaseClient?.auth?.onChange) {
       window.SupabaseClient.auth.onChange((evt, session) => {
         if (evt === 'SIGNED_IN' && session?.user) {
@@ -40,6 +42,14 @@ class AppController {
     setTimeout(() => {
       if (AuthManager.isAuthenticated()) SupabaseSync.processQueue();
     }, 1500);
+  }
+
+  static applySavedTheme() {
+    const saved = localStorage.getItem('reformaplus_theme_v1');
+    const theme = saved === 'dark' || saved === 'light' ? saved : 'light';
+    document.body.setAttribute('data-theme', theme);
+    const btn = document.getElementById('themeToggle');
+    if (btn) btn.innerHTML = theme === 'dark' ? '☀️' : '🌙';
   }
 
   static requireAuth(actionCallback) {
@@ -194,12 +204,30 @@ class AppController {
     const themeToggle = document.getElementById('themeToggle');
     if (themeToggle) {
       themeToggle.addEventListener('click', () => {
-        const currentTheme = document.body.getAttribute('data-theme') || 'dark';
+        const currentTheme = document.body.getAttribute('data-theme') || 'light';
         const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
         document.body.setAttribute('data-theme', newTheme);
+        localStorage.setItem('reformaplus_theme_v1', newTheme);
         themeToggle.innerHTML = newTheme === 'dark' ? '☀️' : '🌙';
       });
     }
+
+    // Máscaras de Moeda em Inputs Monetários (formato pt-BR: 1.234,56)
+    const currencyInputIds = ['propPurchasePrice', 'propEstimatedResalePrice', 'propHoldingCosts', 'expenseAmount'];
+    currencyInputIds.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('blur', () => {
+        if (el.value === '' || el.value == null) return;
+        const numeric = MetricsManager.parseCurrencyFromInput(el.value);
+        el.value = MetricsManager.formatCurrencyForInput(numeric);
+      });
+      el.addEventListener('focus', () => {
+        if (el.value === '' || el.value == null) return;
+        const numeric = MetricsManager.parseCurrencyFromInput(el.value);
+        el.value = numeric === 0 ? '' : numeric.toFixed(2).replace('.', ',');
+      });
+    });
 
     // Eventos de Autenticação / Login
     const btnAuthToggle = document.getElementById('btnAuthToggle');
@@ -625,7 +653,7 @@ class AppController {
       category: document.getElementById('expenseCategory').value,
       room: document.getElementById('expenseRoom').value,
       supplier: document.getElementById('expenseSupplier').value,
-      amount: parseFloat(document.getElementById('expenseAmount').value) || 0,
+      amount: MetricsManager.parseCurrencyFromInput(document.getElementById('expenseAmount').value),
       status: document.getElementById('expenseStatus').value,
       description: document.getElementById('expenseDescription').value,
       receipt: this.currentReceiptPreviewUrl || null
@@ -652,7 +680,7 @@ class AppController {
     document.getElementById('expenseCategory').value = exp.category || 'Alvenaria';
     document.getElementById('expenseRoom').value = exp.room || 'Geral';
     document.getElementById('expenseSupplier').value = exp.supplier || '';
-    document.getElementById('expenseAmount').value = exp.amount || '';
+    document.getElementById('expenseAmount').value = (exp.amount || 0) === 0 ? '' : MetricsManager.formatCurrencyForInput(exp.amount);
     document.getElementById('expenseStatus').value = exp.status || 'pago';
     document.getElementById('expenseDescription').value = exp.description || '';
 
@@ -704,9 +732,9 @@ class AppController {
     document.getElementById('propNeighborhood').value = property.neighborhood || '';
     document.getElementById('propCity').value = property.city || '';
     document.getElementById('propState').value = property.state || '';
-    document.getElementById('propPurchasePrice').value = property.purchasePrice || 0;
-    document.getElementById('propEstimatedResalePrice').value = property.estimatedResalePrice || 0;
-    document.getElementById('propHoldingCosts').value = property.holdingCosts || 0;
+    document.getElementById('propPurchasePrice').value = (property.purchasePrice || 0) === 0 ? '' : MetricsManager.formatCurrencyForInput(property.purchasePrice);
+    document.getElementById('propEstimatedResalePrice').value = (property.estimatedResalePrice || 0) === 0 ? '' : MetricsManager.formatCurrencyForInput(property.estimatedResalePrice);
+    document.getElementById('propHoldingCosts').value = (property.holdingCosts || 0) === 0 ? '' : MetricsManager.formatCurrencyForInput(property.holdingCosts);
     document.getElementById('propNotes').value = property.notes || '';
   }
 
@@ -720,9 +748,9 @@ class AppController {
       neighborhood: document.getElementById('propNeighborhood').value,
       city: document.getElementById('propCity').value,
       state: document.getElementById('propState').value,
-      purchasePrice: parseFloat(document.getElementById('propPurchasePrice').value) || 0,
-      estimatedResalePrice: parseFloat(document.getElementById('propEstimatedResalePrice').value) || 0,
-      holdingCosts: parseFloat(document.getElementById('propHoldingCosts').value) || 0,
+      purchasePrice: MetricsManager.parseCurrencyFromInput(document.getElementById('propPurchasePrice').value),
+      estimatedResalePrice: MetricsManager.parseCurrencyFromInput(document.getElementById('propEstimatedResalePrice').value),
+      holdingCosts: MetricsManager.parseCurrencyFromInput(document.getElementById('propHoldingCosts').value),
       notes: document.getElementById('propNotes').value
     };
 

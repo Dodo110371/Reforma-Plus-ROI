@@ -6,10 +6,31 @@
 class MetricsManager {
   // Formatador de Moeda Brasileira (BRL)
   static formatCurrency(value) {
+    const numeric = typeof value === 'number' ? value : Number(value || 0);
+    if (!Number.isFinite(numeric)) return 'R$ 0,00';
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
-      currency: 'BRL'
-    }).format(value || 0);
+      currency: 'BRL',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(numeric);
+  }
+
+  // Formata valor numérico para string de moeda sem símbolo (para inputs editáveis): "1.234,56"
+  static formatCurrencyForInput(value) {
+    const numeric = typeof value === 'number' ? value : Number(value || 0);
+    if (!Number.isFinite(numeric)) return '';
+    const parts = numeric.toFixed(2).split('.');
+    const integerPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return integerPart + ',' + (parts[1] || '00');
+  }
+
+  // Parseia uma string formatada pt-BR para número: "R$ 1.234,56" ou "1.234,56" → 1234.56
+  static parseCurrencyFromInput(str) {
+    if (str == null) return 0;
+    const cleaned = String(str).replace(/[R$\s]/g, '').replace(/\./g, '').replace(',', '.');
+    const num = Number(cleaned);
+    return Number.isFinite(num) ? num : 0;
   }
 
   // Formatador de Porcentagem
