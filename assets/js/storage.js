@@ -144,22 +144,30 @@ const DEFAULT_EXPENSES = [
 ];
 
 class StorageManager {
+  static __isInitializing = false;
+
   static initStorage() {
-    StorageManager._ensurePropertiesMigrated();
-    const props = StorageManager.listProperties();
-    if (props.length === 0) {
-      const seed = StorageManager._withMeta({ ...DEFAULT_PROPERTY }, null);
-      localStorage.setItem(STORAGE_KEY_PROPERTIES, JSON.stringify([seed]));
-      localStorage.setItem(STORAGE_KEY_ACTIVE_PROPERTY_ID, seed.id);
+    if (StorageManager.__isInitializing) return;
+    StorageManager.__isInitializing = true;
+    try {
+      StorageManager._ensurePropertiesMigrated();
+      const props = StorageManager.listProperties();
+      if (props.length === 0) {
+        const seed = StorageManager._withMeta({ ...DEFAULT_PROPERTY }, null);
+        localStorage.setItem(STORAGE_KEY_PROPERTIES, JSON.stringify([seed]));
+        localStorage.setItem(STORAGE_KEY_ACTIVE_PROPERTY_ID, seed.id);
+      }
+      const activeId = localStorage.getItem(STORAGE_KEY_ACTIVE_PROPERTY_ID);
+      const propsNow = StorageManager.listProperties();
+      if (!activeId || !propsNow.find(p => p.id === activeId)) {
+        localStorage.setItem(STORAGE_KEY_ACTIVE_PROPERTY_ID, propsNow[0].id);
+      }
+      StorageManager._ensureLegacySingletonsFromActive();
+      StorageManager._ensureChildrenScopedToActive();
+      StorageManager._ensureChildrenSeeded();
+    } finally {
+      StorageManager.__isInitializing = false;
     }
-    const activeId = localStorage.getItem(STORAGE_KEY_ACTIVE_PROPERTY_ID);
-    const propsNow = StorageManager.listProperties();
-    if (!activeId || !propsNow.find(p => p.id === activeId)) {
-      localStorage.setItem(STORAGE_KEY_ACTIVE_PROPERTY_ID, propsNow[0].id);
-    }
-    StorageManager._ensureLegacySingletonsFromActive();
-    StorageManager._ensureChildrenScopedToActive();
-    StorageManager._ensureChildrenSeeded();
   }
 
   static _ensurePropertiesMigrated() {
@@ -223,12 +231,21 @@ class StorageManager {
   }
 
   static _ensureLegacySingletonsFromActive() {
+    if (StorageManager.__isInitializing) {
+      const id = localStorage.getItem(STORAGE_KEY_ACTIVE_PROPERTY_ID);
+      if (!id) return;
+      const list = StorageManager.listProperties();
+      const active = list.find(p => p.id === id) || list[0];
+      if (active) localStorage.setItem(STORAGE_KEY_PROPERTY, JSON.stringify(active));
+      return;
+    }
     const active = StorageManager.getPropertyInfo();
     if (active) localStorage.setItem(STORAGE_KEY_PROPERTY, JSON.stringify(active));
   }
 
   static _ensureChildrenSeeded() {
-    const propId = StorageManager.getActivePropertyId();
+    const propId = localStorage.getItem(STORAGE_KEY_ACTIVE_PROPERTY_ID) || StorageManager.listProperties()[0]?.id;
+    if (!propId) return;
     if (!localStorage.getItem(STORAGE_KEY_TRANSACTIONS)) {
       const migrated = DEFAULT_EXPENSES.map(e => ({
         ...StorageManager._migrateExpenseToTx(e),
@@ -275,7 +292,12 @@ class StorageManager {
   }
 
   static getActivePropertyId() {
-    StorageManager.initStorage();
+    if (StorageManager.__isInitializing) {
+      return localStorage.getItem(STORAGE_KEY_ACTIVE_PROPERTY_ID);
+    }
+    try {
+      if (!localStorage.getItem(STORAGE_KEY_PROPERTIES)) StorageManager.initStorage();
+    } catch (_) { }
     return localStorage.getItem(STORAGE_KEY_ACTIVE_PROPERTY_ID);
   }
 
@@ -336,7 +358,11 @@ class StorageManager {
     });
     localStorage.setItem(STORAGE_KEY_PHASES, JSON.stringify(allPhases));
 
-    StorageManager._queueSync('project_stages', 'update', { id: 'bulk-seed' });
+    try {
+      if (!StorageManager.__isInitializing && window.SupabaseSync) {
+        defaultPhases.forEach(s => StorageManager._queueSync('project_stages', 'insert', s));
+      }
+    } catch (_) { /* ignore */ }
   }
 
   static _readAll(key) {

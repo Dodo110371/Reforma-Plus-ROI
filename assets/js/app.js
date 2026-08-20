@@ -14,33 +14,45 @@ class AppController {
   static deferredInstallPrompt = null;
 
   static init() {
-    StorageManager.initStorage();
-    AuthManager.initAuth();
-
-    AppController.applySavedTheme();
-
-    if (window.SupabaseClient?.auth?.onChange) {
-      window.SupabaseClient.auth.onChange((evt, session) => {
-        if (evt === 'SIGNED_IN' && session?.user) {
-          const userId = session.user.id;
-          const existingProp = StorageManager.getPropertyInfo();
-          if (existingProp && (!existingProp.user_id || existingProp.user_id === 'local-user-admin')) {
-            StorageManager.savePropertyInfo({ user_id: userId }, true);
-          }
-        }
-        AppController.updateAuthUI();
-        if (evt === 'SIGNED_IN') {
-          setTimeout(() => SupabaseSync.processQueue(), 800);
-        }
-      });
+    try {
+      StorageManager.initStorage();
+    } catch (err) {
+      console.error('[App] Erro em StorageManager.initStorage (continuando mesmo assim):', err);
+    }
+    try {
+      AuthManager.initAuth();
+    } catch (err) {
+      console.error('[App] Erro em AuthManager.initAuth (continuando mesmo assim):', err);
     }
 
-    this.registerServiceWorker();
-    this.bindEvents();
-    this.renderAllViews();
+    try { AppController.applySavedTheme(); } catch (err) { console.warn(err); }
+
+    try {
+      if (window.SupabaseClient?.auth?.onChange) {
+        window.SupabaseClient.auth.onChange((evt, session) => {
+          try {
+            if (evt === 'SIGNED_IN' && session?.user) {
+              const userId = session.user.id;
+              const existingProp = StorageManager.getPropertyInfo();
+              if (existingProp && (!existingProp.user_id || existingProp.user_id === 'local-user-admin')) {
+                StorageManager.savePropertyInfo({ user_id: userId }, true);
+              }
+            }
+          } catch (err) { console.warn('[App] onChange auth SIGNED_IN handler error:', err); }
+          try { AppController.updateAuthUI(); } catch (_) { }
+          if (evt === 'SIGNED_IN') {
+            setTimeout(() => { try { SupabaseSync.processQueue(); } catch (_) { } }, 800);
+          }
+        });
+      }
+    } catch (err) { console.warn('[App] auth onChange listener não acoplado:', err); }
+
+    try { this.registerServiceWorker(); } catch (err) { console.warn(err); }
+    try { this.bindEvents(); } catch (err) { console.error('[App] ERRO CRÍTICO em bindEvents:', err); }
+    try { this.renderAllViews(); } catch (err) { console.error('[App] ERRO em renderAllViews (bindEvents já rodou):', err); }
 
     setTimeout(() => {
-      if (AuthManager.isAuthenticated()) SupabaseSync.processQueue();
+      try { if (AuthManager.isAuthenticated()) SupabaseSync.processQueue(); } catch (_) { }
     }, 1500);
   }
 
