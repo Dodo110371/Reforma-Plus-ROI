@@ -106,8 +106,13 @@ class AppController {
     const quickBtns = document.querySelectorAll('.quick-nav-btn');
     quickBtns.forEach(btn => {
       btn.addEventListener('click', (e) => {
+        const action = e.currentTarget.getAttribute('data-quicknav-action');
         const target = e.currentTarget.getAttribute('data-quicknav-tab');
-        if (target) this.switchTab(target);
+        if (action === 'goHome' && typeof AppController.goHome === 'function') {
+          AppController.goHome();
+        } else if (target) {
+          this.switchTab(target);
+        }
       });
     });
     try {
