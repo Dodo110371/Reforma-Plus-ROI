@@ -1,5 +1,16 @@
 # 🏗️ BACKEND SETUP - ReformaPlus ROI (Supabase + GitHub + Vercel)
 
+> **Aviso:** Este é o guia de SETUP INICIAL (criar projeto do zero).  
+> 🚀 Se você **já tem o projeto criado** (repo GitHub + Supabase + Vercel já existem) e quer apenas **colocar em produção** ou **atualizar para a versão v2.0 (Multi-Imóveis)**, use o guia **atualizado e mais completo**:
+> 
+> # 👉 [DEPLOY_PRODUCAO.md](file:///c:/Projetos/Reforma_Plus_ROI/DEPLOY_PRODUCAO.md)
+> 
+> **Documentações separadas por objetivo:**
+> | Guia | Quando usar? |
+> |---|---|
+> | `BACKEND_SETUP.md` (este arquivo) | Primeira vez na vida, **criar TUDO do zero** (projeto Supabase, migrations, repo GitHub, Vercel inicial vazio) |
+> | `DEPLOY_PRODUCAO.md` | **Tudo já existe** → aplicar v2.0 Multi-Imóveis, validar build, deploy final, domínio custom, SSL, PWA, monitoramento |
+
 > **Versão:** 2.0.0 | **Stack:** GitHub (Git) · Supabase (Postgres/Auth/Storage/Edge) · Vercel (Hosting PWA)
 
 ---
@@ -15,7 +26,9 @@
 2. GitHub Repo (criar + commit inicial)
 
 3. Vercel (importar repo GitHub + configurar 2 envs)
+   └─ Configurar BUILD COMMAND = `npm run build` (IMPORTANTE v2.0 — gera env.js)
    └─ Acessar URL de produção - PRONTO 🎉
+   └─ Continuar em [DEPLOY_PRODUCAO.md](file:///c:/Projetos/Reforma_Plus_ROI/DEPLOY_PRODUCAO.md) para deploy final (domínio, SSL, PWA, monitoramento)
 ```
 
 ---
