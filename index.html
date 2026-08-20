@@ -162,6 +162,160 @@
       border: 2px dashed rgba(255, 255, 255, 0.1);
       border-radius: 16px;
     }
+
+    /* =============================================================
+       BARRA INFERIOR DE ACESSO RÁPIDO (BOTTOM NAV)
+       ============================================================= */
+    :root {
+      --quicknav-height: 64px;
+      --quicknav-bg: rgba(15, 23, 42, 0.78);
+      --quicknav-border: rgba(255, 255, 255, 0.08);
+      --quicknav-blur: saturate(140%) blur(14px);
+    }
+
+    [data-theme="light"] {
+      --quicknav-bg: rgba(248, 250, 252, 0.82);
+      --quicknav-border: rgba(15, 23, 42, 0.08);
+    }
+
+    .quick-nav {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 75;
+      padding: 0.35rem 0.75rem calc(0.35rem + env(safe-area-inset-bottom));
+      background: var(--quicknav-bg);
+      backdrop-filter: var(--quicknav-blur);
+      -webkit-backdrop-filter: var(--quicknav-blur);
+      border-top: 1px solid var(--quicknav-border);
+      box-shadow: 0 -12px 40px -14px rgba(0, 0, 0, 0.45);
+      display: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .quick-nav-inner {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 0.35rem;
+      align-items: center;
+    }
+
+    .quick-nav-btn {
+      background: transparent;
+      border: 0;
+      padding: 0.5rem 0.25rem;
+      cursor: pointer;
+      border-radius: 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      color: var(--text-dim, #64748b);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      min-width: 0;
+      text-decoration: none;
+      touch-action: manipulation;
+    }
+
+    .quick-nav-btn:hover {
+      background: rgba(16, 185, 129, 0.08);
+      color: var(--text-main, #f8fafc);
+      transform: translateY(-2px);
+    }
+
+    .quick-nav-btn.is-active {
+      background: linear-gradient(180deg, rgba(16, 185, 129, 0.16), rgba(16, 185, 129, 0.05));
+      color: var(--accent-emerald, #10b981);
+      box-shadow: inset 0 -2px 0 0 var(--accent-emerald, #10b981);
+    }
+
+    .quick-nav-btn .qicon {
+      font-size: 1.2rem;
+      line-height: 1;
+      filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.12));
+    }
+
+    .quick-nav-btn .qlabel {
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .quick-nav-btn.is-active .qicon {
+      transform: translateY(-1px) scale(1.05);
+    }
+
+    .quick-nav-btn.is-active .qlabel {
+      font-weight: 800;
+    }
+
+    body {
+      padding-bottom: 0;
+    }
+
+    body.quick-nav-enabled {
+      padding-bottom: calc(var(--quicknav-height) + 0.5rem);
+    }
+
+    /* Responsividade da Quick Nav:
+       - < 480px (mobile): 5 ícones (oculta label + reduz para os mais usados)
+       - 480-767px (phablet): 7 ícones só com ícones (sem label)
+       - 768px-1199px (tablet): 7 ícones com labels curtas
+       - >= 1200px (desktop): 7 ícones com labels completas
+       - desktop >= 1200px: quick-nav some (menu top drawer desktop + horizontal já aparecem)
+    */
+    @media (max-width: 1199.98px) {
+      .quick-nav {
+        display: block;
+      }
+
+      body.quick-nav-enabled {
+        padding-bottom: calc(var(--quicknav-height) + 0.75rem);
+      }
+    }
+
+    @media (max-width: 479.98px) {
+      :root {
+        --quicknav-height: 60px;
+      }
+
+      .quick-nav-inner {
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 0.15rem;
+      }
+
+      .quick-nav-btn {
+        padding: 0.45rem 0.15rem;
+        border-radius: 12px;
+      }
+
+      .quick-nav-btn .qicon {
+        font-size: 1.1rem;
+      }
+
+      .quick-nav-btn .qlabel {
+        font-size: 0.55rem;
+      }
+    }
+
+    @media (max-width: 360px) {
+      .quick-nav-btn .qlabel {
+        font-size: 0.5rem;
+      }
+
+      .quick-nav-btn .qicon {
+        font-size: 1rem;
+      }
+    }
   </style>
 </head>
 
@@ -1493,6 +1647,36 @@
       <small>© 2026 ReformaPlus ROI. Todos os direitos reservados · Feito com 🟢 no Brasil</small>
     </div>
   </footer>
+
+  <!-- Barra Inferior de Acesso Rápido (mobile + tablet) -->
+  <nav class="quick-nav no-print" aria-label="Acesso rápido">
+    <div class="quick-nav-inner">
+      <button type="button" class="quick-nav-btn" data-quicknav-tab="inicio" title="Início · Página Principal">
+        <span class="qicon">🏠</span><span class="qlabel">Início</span>
+      </button>
+      <button type="button" class="quick-nav-btn" data-quicknav-tab="dashboard" title="Dashboard ROI · Visão Geral">
+        <span class="qicon">📊</span><span class="qlabel">Dashboard</span>
+      </button>
+      <button type="button" class="quick-nav-btn" data-quicknav-tab="imovels" title="🏘️ Imóveis · Lista de Imóveis">
+        <span class="qicon">🏘️</span><span class="qlabel">Imóveis</span>
+      </button>
+      <button type="button" class="quick-nav-btn" data-quicknav-tab="lancamentos"
+        title="📝 Lançamentos · Despesas e Receitas">
+        <span class="qicon">📝</span><span class="qlabel">Lançamentos</span>
+      </button>
+      <button type="button" class="quick-nav-btn" data-quicknav-tab="etapas" title="🏗️ Etapas · Cronograma da Obra">
+        <span class="qicon">🏗️</span><span class="qlabel">Etapas</span>
+      </button>
+      <button type="button" class="quick-nav-btn" data-quicknav-tab="relatorios"
+        title="📋 Relatórios · Exportar CSV / PDF">
+        <span class="qicon">📋</span><span class="qlabel">Relatórios</span>
+      </button>
+      <button type="button" class="quick-nav-btn" data-quicknav-tab="configuracoes"
+        title="⚙️ Configurações · Imóvel / Conta / Sistema">
+        <span class="qicon">⚙️</span><span class="qlabel">Ajustes</span>
+      </button>
+    </div>
+  </nav>
 
   <!-- Modal de Autenticação / Login Admin (Híbrido: Supabase + PIN Local) -->
   <div id="modalAuthBackdrop" class="modal-backdrop">

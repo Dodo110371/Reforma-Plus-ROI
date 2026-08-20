@@ -102,6 +102,20 @@ class AppController {
       });
     });
 
+    // Barra Inferior de Acesso Rápido (quick-nav)
+    const quickBtns = document.querySelectorAll('.quick-nav-btn');
+    quickBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget.getAttribute('data-quicknav-tab');
+        if (target) this.switchTab(target);
+      });
+    });
+    try {
+      if (quickBtns.length > 0) {
+        document.body.classList.add('quick-nav-enabled');
+      }
+    } catch (_) { }
+
     // Formulário de Cadastro/Edição de Despesa
     const expenseForm = document.getElementById('expenseForm');
     if (expenseForm) {
@@ -720,7 +734,6 @@ class AppController {
   }
 
   static switchTab(tabName) {
-    // Sincroniza tanto abas desktop (nav-tab) quanto drawer (drawer-nav-item)
     const tabs = document.querySelectorAll('.nav-tab, .drawer-nav-item');
     const tabContents = document.querySelectorAll('.tab-content');
 
@@ -732,10 +745,18 @@ class AppController {
       content.classList.toggle('active', content.id === `tab-${tabName}`);
     });
 
-    // Fecha a gaveta lateral no celular ao escolher uma aba
+    const quickBtns = document.querySelectorAll('.quick-nav-btn');
+    quickBtns.forEach(btn => {
+      btn.classList.toggle('is-active', btn.getAttribute('data-quicknav-tab') === tabName);
+    });
+
+    try {
+      const bar = document.querySelector('.quick-nav');
+      if (bar) document.body.classList.add('quick-nav-enabled');
+    } catch (_) { }
+
     this.closeMobileDrawer();
 
-    // Atualiza relatórios se clicar na aba de relatório
     if (tabName === 'relatorios') {
       this.renderReportTab();
     }
