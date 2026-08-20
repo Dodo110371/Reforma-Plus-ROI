@@ -11,6 +11,9 @@ const STORAGE_KEY_TRANSACTIONS = 'reformaplus_transactions_v2';
 const STORAGE_KEY_STAGES = 'reformaplus_stages_v2';
 const STORAGE_KEY_RECEIPTS = 'reformaplus_receipts_v2';
 
+const STORAGE_KEY_PROPERTIES = 'reformaplus_properties_v1';
+const STORAGE_KEY_ACTIVE_PROPERTY_ID = 'reformaplus_active_property_id_v1';
+
 // Dados Iniciais de Exemplo (Seed Data para teste rápido de Flip Imobiliário)
 const DEFAULT_PROPERTY = {
   id: null,
@@ -141,27 +144,119 @@ const DEFAULT_EXPENSES = [
 ];
 
 class StorageManager {
-  // Inicialização e carregamento padrão
   static initStorage() {
-    if (!localStorage.getItem(STORAGE_KEY_PROPERTY)) {
-      const seed = { ...DEFAULT_PROPERTY, id: StorageManager._guid() };
-      localStorage.setItem(STORAGE_KEY_PROPERTY, JSON.stringify(seed));
+    StorageManager._ensurePropertiesMigrated();
+    const props = StorageManager.listProperties();
+    if (props.length === 0) {
+      const seed = StorageManager._withMeta({ ...DEFAULT_PROPERTY }, null);
+      localStorage.setItem(STORAGE_KEY_PROPERTIES, JSON.stringify([seed]));
+      localStorage.setItem(STORAGE_KEY_ACTIVE_PROPERTY_ID, seed.id);
     }
-    if (!localStorage.getItem(STORAGE_KEY_EXPENSES)) {
-      localStorage.setItem(STORAGE_KEY_EXPENSES, JSON.stringify(DEFAULT_EXPENSES));
+    const activeId = localStorage.getItem(STORAGE_KEY_ACTIVE_PROPERTY_ID);
+    const propsNow = StorageManager.listProperties();
+    if (!activeId || !propsNow.find(p => p.id === activeId)) {
+      localStorage.setItem(STORAGE_KEY_ACTIVE_PROPERTY_ID, propsNow[0].id);
     }
-    if (!localStorage.getItem(STORAGE_KEY_PHASES)) {
-      localStorage.setItem(STORAGE_KEY_PHASES, JSON.stringify(DEFAULT_PHASES));
+    StorageManager._ensureLegacySingletonsFromActive();
+    StorageManager._ensureChildrenScopedToActive();
+    StorageManager._ensureChildrenSeeded();
+  }
+
+  static _ensurePropertiesMigrated() {
+    const hasNew = !!localStorage.getItem(STORAGE_KEY_PROPERTIES);
+    const singleton = localStorage.getItem(STORAGE_KEY_PROPERTY);
+    if (hasNew) {
+      if (singleton) localStorage.removeItem(STORAGE_KEY_PROPERTY);
+      return;
     }
+    let active = null;
+    try { active = singleton ? JSON.parse(singleton) : null; } catch (_) { active = null; }
+    if (active && typeof active === 'object') {
+      const enriched = StorageManager._withMeta(active, active.id);
+      localStorage.setItem(STORAGE_KEY_PROPERTIES, JSON.stringify([enriched]));
+      localStorage.setItem(STORAGE_KEY_ACTIVE_PROPERTY_ID, enriched.id);
+    }
+    const expensesRaw = localStorage.getItem(STORAGE_KEY_EXPENSES);
+    const phasesRaw = localStorage.getItem(STORAGE_KEY_PHASES);
+    const txRaw = localStorage.getItem(STORAGE_KEY_TRANSACTIONS);
+    const stagesRaw = localStorage.getItem(STORAGE_KEY_STAGES);
+    const receiptsRaw = localStorage.getItem(STORAGE_KEY_RECEIPTS);
+    const propId = localStorage.getItem(STORAGE_KEY_ACTIVE_PROPERTY_ID);
+    if (propId) {
+      if (expensesRaw) {
+        try {
+          const arr = JSON.parse(expensesRaw) || [];
+          const out = arr.map(r => ({ ...(r || {}), property_id: r?.property_id || propId }));
+          localStorage.setItem(STORAGE_KEY_EXPENSES, JSON.stringify(out));
+        } catch (_) { }
+      }
+      if (phasesRaw) {
+        try {
+          const arr = JSON.parse(phasesRaw) || [];
+          const out = arr.map(r => ({ ...(r || {}), property_id: r?.property_id || propId }));
+          localStorage.setItem(STORAGE_KEY_PHASES, JSON.stringify(out));
+        } catch (_) { }
+      }
+      if (txRaw) {
+        try {
+          const arr = JSON.parse(txRaw) || [];
+          const out = arr.map(r => ({ ...(r || {}), property_id: r?.property_id || propId }));
+          localStorage.setItem(STORAGE_KEY_TRANSACTIONS, JSON.stringify(out));
+        } catch (_) { }
+      }
+      if (stagesRaw) {
+        try {
+          const arr = JSON.parse(stagesRaw) || [];
+          const out = arr.map(r => ({ ...(r || {}), property_id: r?.property_id || propId }));
+          localStorage.setItem(STORAGE_KEY_STAGES, JSON.stringify(out));
+        } catch (_) { }
+      }
+      if (receiptsRaw) {
+        try {
+          const arr = JSON.parse(receiptsRaw) || [];
+          const out = arr.map(r => ({ ...(r || {}), property_id: r?.property_id || propId }));
+          localStorage.setItem(STORAGE_KEY_RECEIPTS, JSON.stringify(out));
+        } catch (_) { }
+      }
+    }
+    if (singleton) localStorage.removeItem(STORAGE_KEY_PROPERTY);
+  }
+
+  static _ensureLegacySingletonsFromActive() {
+    const active = StorageManager.getPropertyInfo();
+    if (active) localStorage.setItem(STORAGE_KEY_PROPERTY, JSON.stringify(active));
+  }
+
+  static _ensureChildrenSeeded() {
+    const propId = StorageManager.getActivePropertyId();
     if (!localStorage.getItem(STORAGE_KEY_TRANSACTIONS)) {
-      localStorage.setItem(STORAGE_KEY_TRANSACTIONS, JSON.stringify(DEFAULT_EXPENSES.map(StorageManager._migrateExpenseToTx)));
+      const migrated = DEFAULT_EXPENSES.map(e => ({
+        ...StorageManager._migrateExpenseToTx(e),
+        property_id: propId,
+      }));
+      localStorage.setItem(STORAGE_KEY_TRANSACTIONS, JSON.stringify(migrated));
     }
     if (!localStorage.getItem(STORAGE_KEY_STAGES)) {
-      localStorage.setItem(STORAGE_KEY_STAGES, JSON.stringify(DEFAULT_PHASES.map(StorageManager._migratePhaseToStage)));
+      const migrated = DEFAULT_PHASES.map((p, i) => ({
+        ...StorageManager._migratePhaseToStage(p, i),
+        property_id: propId,
+      }));
+      localStorage.setItem(STORAGE_KEY_STAGES, JSON.stringify(migrated));
     }
     if (!localStorage.getItem(STORAGE_KEY_RECEIPTS)) {
       localStorage.setItem(STORAGE_KEY_RECEIPTS, JSON.stringify([]));
     }
+    if (!localStorage.getItem(STORAGE_KEY_EXPENSES)) {
+      const withProp = DEFAULT_EXPENSES.map(e => ({ ...e, property_id: propId }));
+      localStorage.setItem(STORAGE_KEY_EXPENSES, JSON.stringify(withProp));
+    }
+    if (!localStorage.getItem(STORAGE_KEY_PHASES)) {
+      const withProp = DEFAULT_PHASES.map((p, i) => ({ ...p, property_id: propId, order: i }));
+      localStorage.setItem(STORAGE_KEY_PHASES, JSON.stringify(withProp));
+    }
+  }
+
+  static _ensureChildrenScopedToActive() {
   }
 
   static _guid() {
@@ -177,6 +272,111 @@ class StorageManager {
   static _isValidUuid(val) {
     if (!val || typeof val !== 'string') return false;
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
+  }
+
+  static getActivePropertyId() {
+    StorageManager.initStorage();
+    return localStorage.getItem(STORAGE_KEY_ACTIVE_PROPERTY_ID);
+  }
+
+  static setActivePropertyId(propertyId) {
+    if (!propertyId) return false;
+    StorageManager.initStorage();
+    const list = StorageManager.listProperties();
+    const exists = list.find(p => p.id === propertyId);
+    if (!exists) return false;
+    localStorage.setItem(STORAGE_KEY_ACTIVE_PROPERTY_ID, propertyId);
+    StorageManager._ensureLegacySingletonsFromActive();
+    return true;
+  }
+
+  static listProperties() {
+    const raw = localStorage.getItem(STORAGE_KEY_PROPERTIES);
+    if (!raw) return [];
+    try {
+      const arr = JSON.parse(raw) || [];
+      return arr.filter(p => p && p.id);
+    } catch (_) { return []; }
+  }
+
+  static getPropertyById(id) {
+    return StorageManager.listProperties().find(p => p.id === id) || null;
+  }
+
+  static createProperty(propertyData) {
+    const enriched = StorageManager._withMeta({ ...DEFAULT_PROPERTY, ...(propertyData || {}) }, propertyData?.id);
+    if (!enriched.property_id) enriched.property_id = enriched.id;
+    const list = StorageManager.listProperties();
+    list.push(enriched);
+    localStorage.setItem(STORAGE_KEY_PROPERTIES, JSON.stringify(list));
+    StorageManager._seedEmptyChildrenForProperty(enriched.id);
+    StorageManager.setActivePropertyId(enriched.id);
+    StorageManager._ensureLegacySingletonsFromActive();
+    StorageManager._queueSync('properties', 'insert', enriched);
+    return enriched;
+  }
+
+  static _seedEmptyChildrenForProperty(propId) {
+    const defaultPhases = DEFAULT_PHASES.map((p, i) => ({
+      ...StorageManager._migratePhaseToStage(p, i),
+      property_id: propId,
+    }));
+    const allStages = StorageManager._readAll(STORAGE_KEY_STAGES);
+    defaultPhases.forEach(st => {
+      const idx = allStages.findIndex(s => s.id === st.id);
+      if (idx === -1) allStages.push(st);
+      else allStages[idx] = { ...allStages[idx], ...st };
+    });
+    localStorage.setItem(STORAGE_KEY_STAGES, JSON.stringify(allStages));
+
+    const allPhases = StorageManager._readAll(STORAGE_KEY_PHASES);
+    DEFAULT_PHASES.forEach((p, i) => {
+      const entry = { ...p, id: p.id + '-' + (propId || '').slice(0, 6), order: i, property_id: propId };
+      allPhases.push(entry);
+    });
+    localStorage.setItem(STORAGE_KEY_PHASES, JSON.stringify(allPhases));
+
+    StorageManager._queueSync('project_stages', 'update', { id: 'bulk-seed' });
+  }
+
+  static _readAll(key) {
+    try { return JSON.parse(localStorage.getItem(key)) || []; } catch (_) { return []; }
+  }
+
+  static deleteProperty(propertyId) {
+    if (!propertyId) return false;
+    const list = StorageManager.listProperties();
+    const target = list.find(p => p.id === propertyId);
+    if (!target) return false;
+    const kept = list.filter(p => p.id !== propertyId);
+    localStorage.setItem(STORAGE_KEY_PROPERTIES, JSON.stringify(kept));
+    localStorage.setItem(
+      STORAGE_KEY_EXPENSES,
+      JSON.stringify(StorageManager._readAll(STORAGE_KEY_EXPENSES).filter(r => r.property_id !== propertyId))
+    );
+    localStorage.setItem(
+      STORAGE_KEY_PHASES,
+      JSON.stringify(StorageManager._readAll(STORAGE_KEY_PHASES).filter(r => r.property_id !== propertyId))
+    );
+    localStorage.setItem(
+      STORAGE_KEY_TRANSACTIONS,
+      JSON.stringify(StorageManager._readAll(STORAGE_KEY_TRANSACTIONS).filter(r => r.property_id !== propertyId))
+    );
+    localStorage.setItem(
+      STORAGE_KEY_STAGES,
+      JSON.stringify(StorageManager._readAll(STORAGE_KEY_STAGES).filter(r => r.property_id !== propertyId))
+    );
+    localStorage.setItem(
+      STORAGE_KEY_RECEIPTS,
+      JSON.stringify(StorageManager._readAll(STORAGE_KEY_RECEIPTS).filter(r => r.property_id !== propertyId))
+    );
+    if (StorageManager.getActivePropertyId() === propertyId) {
+      if (kept.length > 0) localStorage.setItem(STORAGE_KEY_ACTIVE_PROPERTY_ID, kept[0].id);
+      else localStorage.removeItem(STORAGE_KEY_ACTIVE_PROPERTY_ID);
+    }
+    StorageManager._ensureLegacySingletonsFromActive();
+    StorageManager._queueSync('properties', 'delete', target);
+    return true;
   }
 
   static _withMeta(obj, entityId) {
@@ -266,18 +466,31 @@ class StorageManager {
   }
 
   // --------------------------------------------------------------
-  // Métodos do Imóvel (v1 - compat) + nova semântica v2 com sync
+  // Métodos do Imóvel (v1 - compat) + nova semântica v2 com sync + multi-imóvel
   // --------------------------------------------------------------
   static getPropertyInfo() {
     this.initStorage();
-    return JSON.parse(localStorage.getItem(STORAGE_KEY_PROPERTY));
+    const id = StorageManager.getActivePropertyId();
+    if (!id) {
+      const raw = localStorage.getItem(STORAGE_KEY_PROPERTY);
+      return raw ? JSON.parse(raw) : null;
+    }
+    return StorageManager.getPropertyById(id) || (JSON.parse(localStorage.getItem(STORAGE_KEY_PROPERTY) || 'null'));
   }
 
   static savePropertyInfo(propertyData, skipSync = false) {
-    const existing = this.getPropertyInfo();
-    const merged = this._withMeta({ ...(existing || {}), ...propertyData }, propertyData?.id || existing?.id);
+    this.initStorage();
+    const existing = this.getPropertyInfo() || {};
+    const targetId = propertyData?.id || existing.id || StorageManager.getActivePropertyId();
+    const merged = this._withMeta({ ...existing, ...propertyData, id: targetId }, targetId);
+    merged.property_id = merged.property_id || merged.id;
+    const list = StorageManager.listProperties();
+    const idx = list.findIndex(p => p.id === merged.id);
+    if (idx === -1) list.push(merged); else list[idx] = merged;
+    localStorage.setItem(STORAGE_KEY_PROPERTIES, JSON.stringify(list));
     localStorage.setItem(STORAGE_KEY_PROPERTY, JSON.stringify(merged));
-    if (!skipSync) this._queueSync('properties', existing?.id ? 'update' : 'insert', merged);
+    const isNew = idx === -1;
+    if (!skipSync) this._queueSync('properties', isNew ? 'insert' : 'update', merged);
     return merged;
   }
 
@@ -286,31 +499,37 @@ class StorageManager {
   // --------------------------------------------------------------
   static getExpenses() {
     this.initStorage();
-    return JSON.parse(localStorage.getItem(STORAGE_KEY_EXPENSES)) || [];
+    const propId = StorageManager.getActivePropertyId();
+    const arr = JSON.parse(localStorage.getItem(STORAGE_KEY_EXPENSES)) || [];
+    if (!propId) return arr;
+    return arr.filter(r => r.property_id === propId || !r.property_id);
   }
 
   static saveExpense(expenseData) {
-    const expenses = this.getExpenses();
-    if (expenseData.id) {
-      const index = expenses.findIndex(e => e.id === expenseData.id);
-      if (index !== -1) expenses[index] = expenseData;
-      else expenses.push(expenseData);
+    const expenses = this._readAll(STORAGE_KEY_EXPENSES);
+    const propId = StorageManager.getActivePropertyId();
+    const record = { ...expenseData, property_id: expenseData?.property_id || propId };
+    if (record.id) {
+      const index = expenses.findIndex(e => e.id === record.id);
+      if (index !== -1) expenses[index] = record;
+      else expenses.push(record);
     } else {
-      expenseData.id = 'exp-' + Date.now();
-      expenses.push(expenseData);
+      record.id = 'exp-' + Date.now();
+      expenses.push(record);
     }
     localStorage.setItem(STORAGE_KEY_EXPENSES, JSON.stringify(expenses));
-    // Sync via transactions v2 (mantemos ambos espelhados no MVP)
-    const tx = this._migrateExpenseToTx(expenseData);
+    const tx = this._migrateExpenseToTx(record);
+    tx.property_id = record.property_id;
     this.saveTransaction(tx, true);
-    return expenseData;
+    return record;
   }
 
   static deleteExpense(expenseId) {
-    let expenses = this.getExpenses();
+    let expenses = this._readAll(STORAGE_KEY_EXPENSES);
+    const target = expenses.find(e => e.id === expenseId);
     expenses = expenses.filter(e => e.id !== expenseId);
     localStorage.setItem(STORAGE_KEY_EXPENSES, JSON.stringify(expenses));
-    this.deleteTransaction(expenseId, true);
+    if (target) this.deleteTransaction(expenseId, true);
   }
 
   // --------------------------------------------------------------
@@ -318,13 +537,38 @@ class StorageManager {
   // --------------------------------------------------------------
   static getPhases() {
     this.initStorage();
-    return JSON.parse(localStorage.getItem(STORAGE_KEY_PHASES)) || [];
+    const propId = StorageManager.getActivePropertyId();
+    const arr = JSON.parse(localStorage.getItem(STORAGE_KEY_PHASES)) || [];
+    if (!propId) return arr;
+    return arr.filter(r => r.property_id === propId || !r.property_id);
   }
 
   static savePhases(phasesData) {
-    localStorage.setItem(STORAGE_KEY_PHASES, JSON.stringify(phasesData));
-    const arr = phasesData.map((p, i) => this._migratePhaseToStage(p, i));
-    this.replaceAllStages(arr, true);
+    const propId = StorageManager.getActivePropertyId();
+    const oldAll = this._readAll(STORAGE_KEY_PHASES);
+    const keptOthers = oldAll.filter(r => r.property_id && r.property_id !== propId);
+    const withProp = phasesData.map((p, i) => ({
+      ...(p || {}),
+      id: p?.id || `p-${Date.now()}-${i}`,
+      property_id: p?.property_id || propId,
+      order: p?.order ?? i,
+    }));
+    const merged = [...keptOthers, ...withProp];
+    localStorage.setItem(STORAGE_KEY_PHASES, JSON.stringify(merged));
+    const stages = withProp.map((p, i) => {
+      const stage = this._migratePhaseToStage(p, p?.order ?? i);
+      stage.property_id = propId;
+      return stage;
+    });
+    this._replaceStagesForPropertyId(propId, stages, true);
+  }
+
+  static _replaceStagesForPropertyId(propId, newStagesForProp, skipSync = false) {
+    const all = this._readAll(STORAGE_KEY_STAGES);
+    const others = all.filter(s => s.property_id && s.property_id !== propId);
+    const full = [...others, ...newStagesForProp];
+    localStorage.setItem(STORAGE_KEY_STAGES, JSON.stringify(full));
+    if (!skipSync) newStagesForProp.forEach(s => this._queueSync('project_stages', 'update', s));
   }
 
   // --------------------------------------------------------------
@@ -332,12 +576,18 @@ class StorageManager {
   // --------------------------------------------------------------
   static getTransactions() {
     this.initStorage();
-    return JSON.parse(localStorage.getItem(STORAGE_KEY_TRANSACTIONS)) || [];
+    const propId = StorageManager.getActivePropertyId();
+    const arr = JSON.parse(localStorage.getItem(STORAGE_KEY_TRANSACTIONS)) || [];
+    if (!propId) return arr;
+    return arr.filter(r => r.property_id === propId || !r.property_id);
   }
 
   static saveTransaction(txData, skipSync = false) {
-    const arr = this.getTransactions();
-    const enriched = this._withMeta(txData, txData.id);
+    const arr = this._readAll(STORAGE_KEY_TRANSACTIONS);
+    const propId = StorageManager.getActivePropertyId();
+    const base = { ...txData, property_id: txData?.property_id || propId };
+    const enriched = this._withMeta(base, base.id);
+    enriched.property_id = base.property_id;
     const idx = arr.findIndex(t => t.id === enriched.id);
     const isUpdate = idx !== -1;
     if (isUpdate) arr[idx] = enriched;
@@ -348,7 +598,7 @@ class StorageManager {
   }
 
   static deleteTransaction(txId, skipSync = false) {
-    let arr = this.getTransactions();
+    let arr = this._readAll(STORAGE_KEY_TRANSACTIONS);
     const target = arr.find(t => t.id === txId);
     arr = arr.filter(t => t.id !== txId);
     localStorage.setItem(STORAGE_KEY_TRANSACTIONS, JSON.stringify(arr));
@@ -356,10 +606,18 @@ class StorageManager {
   }
 
   static replaceAllTransactions(newList, skipSync = false) {
-    const enriched = newList.map((t, i) => this._withMeta(t, t.id || `tx-replace-${Date.now()}-${i}`));
-    localStorage.setItem(STORAGE_KEY_TRANSACTIONS, JSON.stringify(enriched));
-    if (!skipSync) enriched.forEach(t => this._queueSync('transactions', 'update', t));
-    return enriched;
+    const propId = StorageManager.getActivePropertyId();
+    const oldAll = this._readAll(STORAGE_KEY_TRANSACTIONS);
+    const otherProps = oldAll.filter(t => t.property_id && t.property_id !== propId);
+    const forActive = newList.map((t, i) => {
+      const enr = this._withMeta(t, t.id || `tx-replace-${Date.now()}-${i}`);
+      enr.property_id = enr.property_id || propId;
+      return enr;
+    });
+    const full = [...otherProps, ...forActive];
+    localStorage.setItem(STORAGE_KEY_TRANSACTIONS, JSON.stringify(full));
+    if (!skipSync) forActive.forEach(t => this._queueSync('transactions', 'update', t));
+    return forActive;
   }
 
   // --------------------------------------------------------------
@@ -367,12 +625,18 @@ class StorageManager {
   // --------------------------------------------------------------
   static getStages() {
     this.initStorage();
-    return JSON.parse(localStorage.getItem(STORAGE_KEY_STAGES)) || [];
+    const propId = StorageManager.getActivePropertyId();
+    const arr = JSON.parse(localStorage.getItem(STORAGE_KEY_STAGES)) || [];
+    if (!propId) return arr;
+    return arr.filter(r => r.property_id === propId || !r.property_id);
   }
 
   static saveStage(stageData, skipSync = false) {
-    const arr = this.getStages();
-    const enriched = this._withMeta(stageData, stageData.id);
+    const arr = this._readAll(STORAGE_KEY_STAGES);
+    const propId = StorageManager.getActivePropertyId();
+    const base = { ...stageData, property_id: stageData?.property_id || propId };
+    const enriched = this._withMeta(base, base.id);
+    enriched.property_id = base.property_id;
     const idx = arr.findIndex(s => s.id === enriched.id);
     const isUpdate = idx !== -1;
     if (isUpdate) arr[idx] = enriched;
@@ -383,7 +647,7 @@ class StorageManager {
   }
 
   static deleteStage(stageId, skipSync = false) {
-    let arr = this.getStages();
+    let arr = this._readAll(STORAGE_KEY_STAGES);
     const target = arr.find(s => s.id === stageId);
     arr = arr.filter(s => s.id !== stageId);
     localStorage.setItem(STORAGE_KEY_STAGES, JSON.stringify(arr));
@@ -391,10 +655,18 @@ class StorageManager {
   }
 
   static replaceAllStages(newList, skipSync = false) {
-    const enriched = newList.map((p, i) => this._withMeta(p, p.id || `stage-${Date.now()}-${i}`));
-    localStorage.setItem(STORAGE_KEY_STAGES, JSON.stringify(enriched));
-    if (!skipSync) enriched.forEach(s => this._queueSync('project_stages', 'update', s));
-    return enriched;
+    const propId = StorageManager.getActivePropertyId();
+    const oldAll = this._readAll(STORAGE_KEY_STAGES);
+    const otherProps = oldAll.filter(s => s.property_id && s.property_id !== propId);
+    const forActive = newList.map((p, i) => {
+      const enr = this._withMeta(p, p.id || `stage-${Date.now()}-${i}`);
+      enr.property_id = enr.property_id || propId;
+      return enr;
+    });
+    const full = [...otherProps, ...forActive];
+    localStorage.setItem(STORAGE_KEY_STAGES, JSON.stringify(full));
+    if (!skipSync) forActive.forEach(s => this._queueSync('project_stages', 'update', s));
+    return forActive;
   }
 
   // --------------------------------------------------------------
@@ -402,7 +674,10 @@ class StorageManager {
   // --------------------------------------------------------------
   static getReceipts() {
     this.initStorage();
-    return JSON.parse(localStorage.getItem(STORAGE_KEY_RECEIPTS)) || [];
+    const propId = StorageManager.getActivePropertyId();
+    const arr = JSON.parse(localStorage.getItem(STORAGE_KEY_RECEIPTS)) || [];
+    if (!propId) return arr;
+    return arr.filter(r => r.property_id === propId || !r.property_id);
   }
 
   static getReceiptsByTransaction(txId) {
@@ -410,16 +685,20 @@ class StorageManager {
   }
 
   static saveReceipt(receiptData, skipSync = false) {
-    const arr = this.getReceipts();
-    const enriched = this._withMeta({
+    const arr = this._readAll(STORAGE_KEY_RECEIPTS);
+    const propId = StorageManager.getActivePropertyId();
+    const base = {
       ...receiptData,
+      property_id: receiptData?.property_id || propId,
       transaction_id: receiptData.transaction_id || receiptData.txId,
       storage_path: receiptData.storage_path || receiptData.path,
       original_filename: receiptData.original_filename || receiptData.originalFilename,
       mime_type: receiptData.mime_type || receiptData.mimeType,
       size_bytes: receiptData.size_bytes || receiptData.sizeBytes || 0,
       is_primary: !!receiptData.is_primary || !!receiptData.isPrimary,
-    }, receiptData.id);
+    };
+    const enriched = this._withMeta(base, base.id);
+    enriched.property_id = base.property_id;
     const idx = arr.findIndex(r => r.id === enriched.id);
     const isUpdate = idx !== -1;
     if (isUpdate) arr[idx] = enriched;
@@ -430,7 +709,7 @@ class StorageManager {
   }
 
   static deleteReceipt(rId, skipSync = false) {
-    let arr = this.getReceipts();
+    let arr = this._readAll(STORAGE_KEY_RECEIPTS);
     const target = arr.find(r => r.id === rId);
     arr = arr.filter(r => r.id !== rId);
     localStorage.setItem(STORAGE_KEY_RECEIPTS, JSON.stringify(arr));
@@ -440,14 +719,16 @@ class StorageManager {
   // Backup e Restauração de Dados (v2 - inclui transactions/stages/receipts)
   static exportAllDataJSON() {
     const backupObj = {
-      version: '2.0',
+      version: '2.1',
       exportedAt: new Date().toISOString(),
+      properties: this.listProperties(),
+      active_property_id: this.getActivePropertyId(),
       property: this.getPropertyInfo(),
-      expenses: this.getExpenses(),
-      phases: this.getPhases(),
-      transactions: this.getTransactions(),
-      stages: this.getStages(),
-      receipts: this.getReceipts(),
+      expenses: this._readAll(STORAGE_KEY_EXPENSES),
+      phases: this._readAll(STORAGE_KEY_PHASES),
+      transactions: this._readAll(STORAGE_KEY_TRANSACTIONS),
+      stages: this._readAll(STORAGE_KEY_STAGES),
+      receipts: this._readAll(STORAGE_KEY_RECEIPTS),
     };
     return JSON.stringify(backupObj, null, 2);
   }
@@ -455,6 +736,10 @@ class StorageManager {
   static importAllDataJSON(jsonString) {
     try {
       const data = JSON.parse(jsonString);
+      if (Array.isArray(data.properties) && data.properties.length > 0) {
+        localStorage.setItem(STORAGE_KEY_PROPERTIES, JSON.stringify(data.properties));
+        if (data.active_property_id) localStorage.setItem(STORAGE_KEY_ACTIVE_PROPERTY_ID, String(data.active_property_id));
+      }
       if (data.property) localStorage.setItem(STORAGE_KEY_PROPERTY, JSON.stringify(data.property));
       if (data.expenses) localStorage.setItem(STORAGE_KEY_EXPENSES, JSON.stringify(data.expenses));
       if (data.phases) localStorage.setItem(STORAGE_KEY_PHASES, JSON.stringify(data.phases));
@@ -469,11 +754,20 @@ class StorageManager {
   }
 
   static resetToDefaultData() {
-    localStorage.setItem(STORAGE_KEY_PROPERTY, JSON.stringify({ ...DEFAULT_PROPERTY, id: StorageManager._guid() }));
-    localStorage.setItem(STORAGE_KEY_EXPENSES, JSON.stringify(DEFAULT_EXPENSES));
-    localStorage.setItem(STORAGE_KEY_PHASES, JSON.stringify(DEFAULT_PHASES));
-    localStorage.setItem(STORAGE_KEY_TRANSACTIONS, JSON.stringify(DEFAULT_EXPENSES.map(StorageManager._migrateExpenseToTx)));
-    localStorage.setItem(STORAGE_KEY_STAGES, JSON.stringify(DEFAULT_PHASES.map(StorageManager._migratePhaseToStage)));
+    const seed = StorageManager._withMeta({ ...DEFAULT_PROPERTY }, null);
+    localStorage.setItem(STORAGE_KEY_PROPERTIES, JSON.stringify([seed]));
+    localStorage.setItem(STORAGE_KEY_ACTIVE_PROPERTY_ID, seed.id);
+    localStorage.setItem(STORAGE_KEY_PROPERTY, JSON.stringify(seed));
+    localStorage.setItem(STORAGE_KEY_EXPENSES, JSON.stringify(DEFAULT_EXPENSES.map(e => ({ ...e, property_id: seed.id }))));
+    localStorage.setItem(STORAGE_KEY_PHASES, JSON.stringify(DEFAULT_PHASES.map((p, i) => ({ ...p, order: i, property_id: seed.id }))));
+    localStorage.setItem(
+      STORAGE_KEY_TRANSACTIONS,
+      JSON.stringify(DEFAULT_EXPENSES.map(e => ({ ...StorageManager._migrateExpenseToTx(e), property_id: seed.id })))
+    );
+    localStorage.setItem(
+      STORAGE_KEY_STAGES,
+      JSON.stringify(DEFAULT_PHASES.map((p, i) => ({ ...StorageManager._migratePhaseToStage(p, i), property_id: seed.id })))
+    );
     localStorage.setItem(STORAGE_KEY_RECEIPTS, JSON.stringify([]));
   }
 }

@@ -294,6 +294,174 @@ class AppController {
         setTimeout(() => window.print(), 300);
       });
     }
+
+    // Gerenciamento Multi-Imóvel
+    const propertySelector = document.getElementById('propertySelector');
+    if (propertySelector) {
+      propertySelector.addEventListener('change', (e) => {
+        const newId = e.target.value;
+        if (!newId) return;
+        const ok = StorageManager.setActivePropertyId(newId);
+        if (!ok) {
+          this.showToast('Erro ao trocar de imóvel ativo.', 'error');
+          return;
+        }
+        this.refreshPropertySelectorOptions();
+        this.renderAllViews();
+        setTimeout(() => SupabaseSync.processQueue(), 400);
+        this.showToast('Imóvel alterado com sucesso!');
+      });
+    }
+    const btnNewPropertyHeader = document.getElementById('btnNewPropertyHeader');
+    if (btnNewPropertyHeader) {
+      btnNewPropertyHeader.addEventListener('click', () => this.handleCreateNewProperty());
+    }
+    const btnNewPropertyPage = document.getElementById('btnNewPropertyPage');
+    if (btnNewPropertyPage) {
+      btnNewPropertyPage.addEventListener('click', () => this.handleCreateNewProperty());
+    }
+  }
+
+  static refreshPropertySelectorOptions() {
+    const selector = document.getElementById('propertySelector');
+    if (!selector) return;
+    const list = StorageManager.listProperties() || [];
+    const activeId = StorageManager.getActivePropertyId();
+    selector.innerHTML = '';
+    list.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = (p.title ? p.title.trim() : 'Imóvel sem nome') + (p.city && p.state ? ` · ${p.city}/${p.state}` : '');
+      if (p.id === activeId) opt.selected = true;
+      selector.appendChild(opt);
+    });
+  }
+
+  static handleCreateNewProperty() {
+    const n = (StorageManager.listProperties()?.length || 0) + 1;
+    const newProp = StorageManager.createProperty({
+      title: `Novo Imóvel ${n}`,
+      notes: 'Cadastre aqui os dados do novo imóvel, lançamentos e etapas.',
+    });
+    this.refreshPropertySelectorOptions();
+    this.renderAllViews();
+    this.switchTab('configuracoes');
+    setTimeout(() => {
+      const titleInput = document.getElementById('propTitle');
+      if (titleInput) {
+        titleInput.focus();
+        titleInput.select();
+      }
+    }, 250);
+    setTimeout(() => SupabaseSync.processQueue(), 600);
+    this.showToast('Novo imóvel cadastrado! Preencha os dados abaixo.');
+  }
+
+  static renderPropertiesView() {
+    const container = document.getElementById('propertiesList');
+    if (!container) return;
+    const list = StorageManager.listProperties() || [];
+    const activeId = StorageManager.getActivePropertyId();
+    if (list.length === 0) {
+      container.innerHTML = `<div class="property-empty"><h3 style="margin: 0 0 0.5rem 0;">Nenhum imóvel cadastrado</h3><p style="margin: 0;">Clique em <strong>Cadastrar Novo Imóvel</strong> para começar.</p></div>`;
+      return;
+    }
+    container.innerHTML = list.map(p => {
+      const isActive = p.id === activeId;
+      const addr = [
+        (p.street ? (p.number ? `${p.street}, ${p.number}` : p.street) : ''),
+        p.neighborhood || '',
+        p.city ? (p.state ? `${p.city}/${p.state}` : p.city) : (p.state || ''),
+        p.cep ? `CEP ${p.cep}` : '',
+      ].filter(Boolean).join(' · ') || 'Endereço não cadastrado';
+      const totalTx = StorageManager._readAll && typeof StorageManager._readAll === 'function'
+        ? (StorageManager._readAll('reformaplus_transactions_v2') || []).filter(t => t.property_id === p.id).length
+        : 0;
+      const pp = typeof MetricsManager?.formatCurrency === 'function' ? MetricsManager.formatCurrency(p.purchasePrice || 0) : `R$ ${(p.purchasePrice || 0).toFixed(2)}`;
+      const arv = typeof MetricsManager?.formatCurrency === 'function' ? MetricsManager.formatCurrency(p.estimatedResalePrice || 0) : `R$ ${(p.estimatedResalePrice || 0).toFixed(2)}`;
+      let roi = 0;
+      try {
+        const price = Number(p.purchasePrice || 0);
+        const costs = Number(p.holdingCosts || 0);
+        const spent = (StorageManager._readAll && typeof StorageManager._readAll === 'function')
+          ? (StorageManager._readAll('reformaplus_transactions_v2') || []).filter(t => t.property_id === p.id && (t.tx_type || t.type) === 'expense').reduce((acc, t) => acc + Number(t.amount || 0), 0)
+          : 0;
+        const totalInvest = price + costs + spent;
+        const arvNum = Number(p.estimatedResalePrice || 0);
+        roi = totalInvest > 0 ? ((arvNum - totalInvest) / totalInvest) * 100 : 0;
+      } catch (_) { roi = 0; }
+      const roiStr = `${roi >= 0 ? '+' : ''}${roi.toFixed(1).replace('.', ',')}%`;
+      return `
+        <div class="property-card ${isActive ? 'is-active' : ''}" data-property-id="${p.id}">
+          <div class="property-card-header">
+            <div>
+              <h4 class="property-card-title">${String(p.title || 'Imóvel sem nome').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</h4>
+              <p class="property-card-addr">📍 ${String(addr).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+            </div>
+            ${isActive ? '<span class="badge-active">✅ ATIVO</span>' : ''}
+          </div>
+          <div class="property-card-stats">
+            <div class="property-stat">
+              <div class="property-stat-label">Aquisição</div>
+              <div class="property-stat-value">${pp}</div>
+            </div>
+            <div class="property-stat">
+              <div class="property-stat-label">ARV (Venda)</div>
+              <div class="property-stat-value">${arv}</div>
+            </div>
+            <div class="property-stat">
+              <div class="property-stat-label">Lançamentos</div>
+              <div class="property-stat-value">${totalTx}</div>
+            </div>
+            <div class="property-stat">
+              <div class="property-stat-label">ROI Estimado</div>
+              <div class="property-stat-value ${roi >= 0 ? 'success' : ''}" style="${roi < 0 ? 'color: var(--status-danger);' : ''}">${roiStr}</div>
+            </div>
+          </div>
+          <div class="property-card-actions">
+            <button class="btn btn-primary btn-sm" onclick="AppController.handleActivateProperty('${p.id}')">
+              ${isActive ? '✅ Imóvel Ativo' : '🎯 Usar Este'}
+            </button>
+            <button class="btn btn-outline btn-sm" onclick="AppController.handleEditProperty('${p.id}')">✏️ Editar Dados</button>
+            ${list.length > 1 ? `<button class="btn btn-danger btn-sm" onclick="AppController.handleDeleteProperty('${p.id}')">🗑️ Excluir</button>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  static handleActivateProperty(id) {
+    const ok = StorageManager.setActivePropertyId(id);
+    if (!ok) return this.showToast('Erro ao ativar imóvel.', 'error');
+    this.refreshPropertySelectorOptions();
+    this.renderAllViews();
+    setTimeout(() => SupabaseSync.processQueue(), 400);
+    this.showToast('Imóvel ativado com sucesso!');
+  }
+
+  static handleEditProperty(id) {
+    StorageManager.setActivePropertyId(id);
+    this.refreshPropertySelectorOptions();
+    this.renderAllViews();
+    this.switchTab('configuracoes');
+    setTimeout(() => document.getElementById('propTitle')?.focus(), 250);
+  }
+
+  static handleDeleteProperty(id) {
+    const list = StorageManager.listProperties() || [];
+    const target = list.find(p => p.id === id);
+    if (!target) return;
+    if (list.length < 2) {
+      return this.showToast('Não é possível excluir: você precisa manter pelo menos 1 imóvel.', 'error');
+    }
+    const name = target.title || 'este imóvel';
+    const ok = confirm(`Tem CERTEZA que deseja EXCLUIR "${name}"?\n\nTodos os lançamentos, etapas e recibos relacionados a ELE serão apagados do app (local).\n\nEssa ação NÃO PODE ser desfeita.`);
+    if (!ok) return;
+    StorageManager.deleteProperty(id);
+    this.refreshPropertySelectorOptions();
+    this.renderAllViews();
+    setTimeout(() => SupabaseSync.processQueue(), 500);
+    this.showToast('Imóvel e seus dados foram excluídos.');
   }
 
   static _authMode = 'local';
@@ -562,6 +730,8 @@ class AppController {
   }
 
   static renderAllViews() {
+    this.refreshPropertySelectorOptions();
+    this.renderPropertiesView();
     this.updateAuthUI();
     this.renderDashboard();
     this.renderExpensesTable();

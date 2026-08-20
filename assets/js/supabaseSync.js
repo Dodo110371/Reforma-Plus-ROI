@@ -283,6 +283,7 @@
     if (!payload || typeof payload !== 'object') return payload;
     const out = {};
     if (payload.id !== undefined) out.id = payload.id;
+    if (payload.property_id !== undefined) out.property_id = payload.property_id;
     if (payload.transaction_id !== undefined) out.transaction_id = payload.transaction_id;
     if (payload.txId !== undefined && !out.transaction_id) out.transaction_id = payload.txId;
     if (payload.user_id !== undefined) out.user_id = payload.user_id;
@@ -303,20 +304,35 @@
     return out;
   }
 
+  function _ensureActivePropertyIdOnPayload(entity, payload) {
+    if (!payload) return payload;
+    if (payload.property_id) return payload;
+    let activeId = null;
+    try {
+      if (window.StorageManager?.getActivePropertyId) activeId = window.StorageManager.getActivePropertyId();
+    } catch (_) { }
+    if (entity === 'transaction_receipts' || entity === 'transactions' || entity === 'project_stages' || entity === 'properties') {
+      if (activeId && !payload.property_id) return { ...payload, property_id: activeId };
+    }
+    return payload;
+  }
+
   function _normalizePayloadForEntity(entity, payload) {
+    const enriched = _ensureActivePropertyIdOnPayload(entity, payload);
     switch (entity) {
-      case 'properties': return _normalizePropertiesPayload(payload);
-      case 'project_stages': return _normalizeProjectStagesPayload(payload);
-      case 'transactions': return _normalizeTransactionsPayload(payload);
-      case 'transaction_receipts': return _normalizeTransactionReceiptsPayload(payload);
-      default: return payload;
+      case 'properties': return _normalizePropertiesPayload(enriched);
+      case 'project_stages': return _normalizeProjectStagesPayload(enriched);
+      case 'transactions': return _normalizeTransactionsPayload(enriched);
+      case 'transaction_receipts': return _normalizeTransactionReceiptsPayload(enriched);
+      default: return enriched;
     }
   }
 
   async function _dispatchOne(client, user, op) {
     const { entity, op: verb, payload } = op;
     console.debug(`[Sync]   ↪️ Executando ${entity}.${verb} (id=${payload.id})`);
-    let withUser = { ...payload, user_id: payload.user_id || user.id };
+    const withProp = _ensureActivePropertyIdOnPayload(entity, payload || {});
+    let withUser = { ...withProp, user_id: withProp.user_id || user.id };
 
     if (verb !== 'delete') {
       withUser = _normalizePayloadForEntity(entity, withUser);
@@ -439,68 +455,102 @@
   async function mergeCloudIntoLocal(snap, user_id) {
     if (!window.StorageManager || !StorageManager.savePropertyInfo) return {};
     const merged = { properties: 0, stages: 0, transactions: 0 };
-
-    const localProp = StorageManager.getPropertyInfo() || {};
-    if (snap.properties.length > 0 && !localProp.id) {
-      const p = snap.properties[0];
-      const model = {
-        id: p.id, user_id,
-        title: p.title || localProp.title || 'Imóvel sem nome',
-        cep: p.cep || '', street: p.street || '', number: p.number || '',
-        complement: p.complement || '', neighborhood: p.neighborhood || '',
-        city: p.city || '', state: p.state || '',
-        purchasePrice: p.purchase_price ?? localProp.purchasePrice ?? 0,
-        estimatedResalePrice: p.estimated_resale_price ?? localProp.estimatedResalePrice ?? 0,
-        holdingCosts: p.holding_costs ?? localProp.holdingCosts ?? 0,
-        targetDurationMonths: p.target_duration_months ?? localProp.targetDurationMonths ?? 4,
-        notes: p.notes || localProp.notes || '',
-      };
-      StorageManager.savePropertyInfo(model, /*skipSync*/ true);
-      merged.properties++;
+    if (snap.properties && snap.properties.length > 0) {
+      const listLocal = StorageManager.listProperties() || [];
+      const localById = Object.fromEntries(listLocal.map(p => [p.id, p]));
+      let activeId = StorageManager.getActivePropertyId();
+      snap.properties.forEach(p => {
+        const local = localById[p.id];
+        const cloudTs = new Date(p.updated_at || 0).getTime();
+        const localTs = new Date(local?.updated_at || 0).getTime();
+        const newer = cloudTs >= localTs ? p : local;
+        const model = {
+          id: newer?.id || p.id, user_id: newer?.user_id || user_id,
+          title: newer?.title || 'Imóvel sem nome',
+          cep: newer?.cep || '', street: newer?.street || '', number: newer?.number || '',
+          complement: newer?.complement || '', neighborhood: newer?.neighborhood || '',
+          city: newer?.city || '', state: newer?.state || '',
+          purchasePrice: newer?.purchase_price ?? newer?.purchasePrice ?? 0,
+          estimatedResalePrice: newer?.estimated_resale_price ?? newer?.estimatedResalePrice ?? 0,
+          holdingCosts: newer?.holding_costs ?? newer?.holdingCosts ?? 0,
+          targetDurationMonths: newer?.target_duration_months ?? newer?.targetDurationMonths ?? 4,
+          notes: newer?.notes || '',
+          created_at: newer?.created_at || p.created_at,
+          updated_at: newer?.updated_at || p.updated_at,
+        };
+        const exists = listLocal.findIndex(x => x.id === model.id);
+        if (exists === -1) listLocal.push(model); else listLocal[exists] = model;
+        if (!activeId) activeId = model.id;
+        merged.properties++;
+      });
+      localStorage.setItem('reformaplus_properties_v1', JSON.stringify(listLocal));
+      if (activeId) localStorage.setItem('reformaplus_active_property_id_v1', String(activeId));
     }
 
-    if (snap.stages.length > 0 && window.StorageManager && StorageManager.replaceAllStages) {
-      StorageManager.replaceAllStages(
-        snap.stages.map(s => ({
-          id: s.id,
-          name: s.name, order: s.stage_order ?? 0,
-          status: s.status,
-          physicalPct: s.physical_pct ?? 0,
-          financialPct: s.financial_pct ?? 0,
-          budgetAmount: s.budget_amount ?? 0,
-          spentAmount: s.spent_amount ?? 0,
-          startDate: s.start_date, endDate: s.end_date,
-          notes: s.notes || '',
-        })),
-        /*skipSync*/ true
-      );
-      merged.stages = snap.stages.length;
+    if (snap.stages && snap.stages.length > 0 && window.StorageManager) {
+      const all = StorageManager._readAll ? StorageManager._readAll('reformaplus_stages_v2') : (StorageManager.getStages ? StorageManager.getStages() : []);
+      const stagesFromCloud = snap.stages.map(s => ({
+        id: s.id,
+        property_id: s.property_id || StorageManager.getActivePropertyId(),
+        name: s.name, order: s.stage_order ?? 0,
+        status: s.status,
+        physicalPct: s.physical_pct ?? 0,
+        financialPct: s.financial_pct ?? 0,
+        budgetAmount: s.budget_amount ?? 0,
+        spentAmount: s.spent_amount ?? 0,
+        startDate: s.start_date, endDate: s.end_date,
+        notes: s.notes || '',
+        created_at: s.created_at, updated_at: s.updated_at, user_id: s.user_id || user_id,
+      }));
+      const map = new Map();
+      all.forEach(it => map.set(it.id, it));
+      stagesFromCloud.forEach(it => {
+        const cur = map.get(it.id);
+        const curTs = new Date(cur?.updated_at || 0).getTime();
+        const newTs = new Date(it.updated_at || 0).getTime();
+        if (!cur || newTs >= curTs) map.set(it.id, it);
+      });
+      const final = Array.from(map.values());
+      localStorage.setItem('reformaplus_stages_v2', JSON.stringify(final));
+      merged.stages = stagesFromCloud.length;
     }
 
-    if (snap.transactions.length > 0 && window.StorageManager && StorageManager.replaceAllTransactions) {
-      StorageManager.replaceAllTransactions(
-        snap.transactions.map(t => ({
-          id: t.id,
-          type: t.tx_type,
-          category: t.category, subcategory: t.subcategory || '',
-          environment: t.environment || '',
-          description: t.description,
-          amount: t.amount || 0,
-          quantity: t.quantity || 1,
-          unitPrice: t.unit_price || null,
-          supplier: t.supplier || '',
-          documentNumber: t.document_number || '',
-          paymentMethod: t.payment_method || 'Pix',
-          paymentStatus: t.payment_status || 'paid',
-          date: t.tx_date,
-          dueDate: t.due_date || null,
-          stageId: t.stage_id || null,
-          notes: t.notes || '',
-        })),
-        /*skipSync*/ true
-      );
-      merged.transactions = snap.transactions.length;
+    if (snap.transactions && snap.transactions.length > 0 && window.StorageManager) {
+      const all = StorageManager._readAll ? StorageManager._readAll('reformaplus_transactions_v2') : (StorageManager.getTransactions ? StorageManager.getTransactions() : []);
+      const txFromCloud = snap.transactions.map(t => ({
+        id: t.id,
+        property_id: t.property_id || StorageManager.getActivePropertyId(),
+        type: t.tx_type,
+        category: t.category, subcategory: t.subcategory || '',
+        environment: t.environment || '',
+        description: t.description,
+        amount: t.amount || 0,
+        quantity: t.quantity || 1,
+        unitPrice: t.unit_price || null,
+        supplier: t.supplier || '',
+        documentNumber: t.document_number || '',
+        paymentMethod: t.payment_method || 'Pix',
+        paymentStatus: t.payment_status || 'paid',
+        date: t.tx_date,
+        dueDate: t.due_date || null,
+        stageId: t.stage_id || null,
+        notes: t.notes || '',
+        user_id: t.user_id || user_id,
+        created_at: t.created_at, updated_at: t.updated_at,
+      }));
+      const map = new Map();
+      all.forEach(it => map.set(it.id, it));
+      txFromCloud.forEach(it => {
+        const cur = map.get(it.id);
+        const curTs = new Date(cur?.updated_at || 0).getTime();
+        const newTs = new Date(it.updated_at || 0).getTime();
+        if (!cur || newTs >= curTs) map.set(it.id, it);
+      });
+      const final = Array.from(map.values());
+      localStorage.setItem('reformaplus_transactions_v2', JSON.stringify(final));
+      merged.transactions = txFromCloud.length;
     }
+    StorageManager._ensureLegacySingletonsFromActive && StorageManager._ensureLegacySingletonsFromActive();
     return merged;
   }
 
