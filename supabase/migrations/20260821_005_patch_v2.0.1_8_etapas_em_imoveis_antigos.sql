@@ -1,54 +1,82 @@
 -- ============================================================
 -- PATCH MIGRATION v2.0.1 — Completa 8 Etapas padrão em Projetos Antigos
 --   Usuários que tinham criado projeto ANTES deste patch só tinham 6 etapas.
---   Adiciona automaticamente p1 (Planejamento) e p8 (Entrega das Chaves)
---   para todo imóvel (property_id) que só tiver 6 stages.
+--   Adiciona automaticamente:
+--     (p0) Planejamento e Projeto (no começo, antes da demolição)
+--     (p7) Limpeza Final e Entrega das Chaves (no final, após marcenaria)
+--   ...para TODO imóvel (property_id) que só tiver 6 stages (padrão v1/v1.5).
+--
+--   Schema correto de project_stages:
+--     id (uuid PK DEFAULT uuid_generate_v4())
+--     user_id, property_id (FKs obrigatórios - user_id NOT NULL)
+--     name (text)
+--     stage_order (int, DEFAULT 0)  ← não existe "position"
+--     status (text ENUM CHECK: 'pending' | 'in_progress' | 'completed' | 'delayed')
+--     budget_amount numeric(15,2)    ← não existe "budget" (era nome frontend)
+--     spent_amount numeric, physical_pct, financial_pct, start_date, end_date, notes
+--     created_at / updated_at DEFAULT now_utc() (trigger, não precisamos passar)
 -- ============================================================
 
 DO $$
 DECLARE
-  prop_id uuid;
-  uid uuid;
+  r RECORD;
   _now timestamptz;
-  _counter int;
 BEGIN
-  _now := now();
+  _now := public.now_utc();
 
-  FOR prop_id, uid IN SELECT DISTINCT ps.property_id, ps.user_id FROM public.project_stages ps WHERE ps.property_id IS NOT NULL LOOP
-    SELECT COUNT(*) INTO _counter FROM public.project_stages s WHERE s.property_id = prop_id;
+  -- Itera cada property_id distinto (e seu dono user_id) que só tem 6 stages
+  FOR r IN
+      SELECT ps.property_id AS pid,
+             ps.user_id     AS uid,
+             COUNT(*)       AS qtd
+        FROM public.project_stages ps
+       WHERE ps.property_id IS NOT NULL
+       GROUP BY ps.property_id, ps.user_id
+      HAVING COUNT(*) = 6
+  LOOP
+    -- Etapa 0: Planejamento e Projeto (concluído na maioria dos flip - já está pronto antes de demolir)
+    INSERT INTO public.project_stages (
+      id, user_id, property_id, name, stage_order, status, budget_amount, spent_amount,
+      physical_pct, financial_pct, created_at, updated_at
+    ) VALUES (
+      uuid_generate_v4(),
+      r.uid,
+      r.pid,
+      'Planejamento e Projeto',
+      0,
+      'completed',
+      6500.00,
+      0.00,
+      100.00,
+      0.00,
+      _now,
+      _now
+    ) ON CONFLICT DO NOTHING;
 
-    -- Imóveis criados na v1.0/v1.5 tinham 6 stages. Acrescenta os 2 faltantes.
-    IF _counter = 6 THEN
-      -- p1 Planejamento e Projeto (no topo, antes da demolição)
-      INSERT INTO public.project_stages (id, property_id, user_id, name, status, budget, position, created_at, updated_at)
-      VALUES (
-        'p1-' || substr(prop_id::text,1,8) || '-' || to_char(_now,'MMDDHH24MISS'),
-        prop_id,
-        uid,
-        'Planejamento e Projeto',
-        'concluido',
-        6500.00,
-        0,
-        _now,
-        _now
-      )
-      ON CONFLICT DO NOTHING;
+    -- Etapa 7: Limpeza Final + Entrega (pendente - última)
+    INSERT INTO public.project_stages (
+      id, user_id, property_id, name, stage_order, status, budget_amount, spent_amount,
+      physical_pct, financial_pct, created_at, updated_at
+    ) VALUES (
+      uuid_generate_v4(),
+      r.uid,
+      r.pid,
+      'Limpeza Final e Entrega das Chaves',
+      7,
+      'pending',
+      3500.00,
+      0.00,
+      0.00,
+      0.00,
+      _now,
+      _now
+    ) ON CONFLICT DO NOTHING;
 
-      -- p8 Limpeza Final e Entrega (no final, após marcenaria)
-      INSERT INTO public.project_stages (id, property_id, user_id, name, status, budget, position, created_at, updated_at)
-      VALUES (
-        'p8-' || substr(prop_id::text,1,8) || '-' || to_char(_now,'MMDDHH24MISS'),
-        prop_id,
-        uid,
-        'Limpeza Final e Entrega das Chaves',
-        'pendente',
-        3500.00,
-        7,
-        _now,
-        _now
-      )
-      ON CONFLICT DO NOTHING;
-    END IF;
+    -- Reordena os stages ANTIGOS de 1..6 (eles eram 0..5, agora 0 virou planejamento)
+    UPDATE public.project_stages ps
+       SET stage_order = ps.stage_order + 1
+     WHERE ps.property_id = r.pid
+       AND ps.name NOT IN ('Planejamento e Projeto', 'Limpeza Final e Entrega das Chaves');
   END LOOP;
 END $$;
 
