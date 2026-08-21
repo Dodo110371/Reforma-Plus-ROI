@@ -2,11 +2,11 @@
   "name": "ReformaPlus ROI - Gestão de Reforma e Flip Imobiliário",
   "short_name": "ReformaPlus",
   "description": "Controle financeiro, gestão de materiais, serviços e cálculo de ROI para reformas e revenda imobiliária.",
-  "id": "/?v=2.0.1",
-  "start_url": "/?utm_source=pwa&utm_medium=homescreen",
+  "id": "/",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "window-control-overlay", "minimal-ui"],
+  "display_override": ["standalone", "window-control-overlay", "minimal-ui", "browser"],
   "background_color": "#ffffff",
   "theme_color": "#10b981",
   "orientation": "portrait-primary",
@@ -14,9 +14,42 @@
   "dir": "ltr",
   "categories": ["business", "finance", "productivity"],
   "launch_handler": {
-    "client_mode": "auto"
+    "client_mode": "auto",
+    "route_to": "auto",
+    "navigate_existing_client": "always"
   },
-  "prefer_related_applications": false,
+  "protocol_handlers": [
+    {
+      "protocol": "web+reformaplus",
+      "url": "/?launch=%s"
+    }
+  ],
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "file_handlers": [
+    {
+      "action": "/?launch=receipts&utm_source=pwa_file_handler",
+      "accept": {
+        "image/*": [".png", ".jpg", ".jpeg", ".webp", ".gif"]
+      },
+      "name": "Recibos e Fotos da Obra",
+      "icons": [{ "src": "./assets/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "share_target": {
+    "action": "/?launch=share_target&utm_source=pwa_share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        { "name": "photos", "accept": ["image/*"], "maxSize": 2621440 }
+      ]
+    }
+  },
   "shortcuts": [
     {
       "name": "Novo Lançamento",

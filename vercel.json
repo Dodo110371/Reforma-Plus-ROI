@@ -7,6 +7,11 @@
   "installCommand": "npm install --no-audit --no-fund",
   "cleanUrls": true,
   "trailingSlash": false,
+  "redirects": [
+    { "source": "/index.html", "destination": "/", "permanent": true, "statusCode": 308 },
+    { "source": "/home", "destination": "/", "permanent": false, "statusCode": 302 },
+    { "source": "/inicio", "destination": "/", "permanent": false, "statusCode": 302 }
+  ],
   "headers": [
     {
       "source": "/(.*)\\.(js|css|png|jpg|jpeg|svg|webp|ico|woff|woff2|ttf)",
@@ -40,8 +45,5 @@
   ],
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
-  ],
-  "env": {
-    "VITE_LOCAL_ONLY": "false"
-  }
+  ]
 }
