@@ -1,6 +1,8 @@
 // Service Worker para suporte Offline e PWA do ReformaPlus ROI
-// v2.0.1 — hotfix: Chrome Android WebAPK start_url "/" + fallback "/index.html" (evita ERR_FAILED 404)
-const CACHE_NAME = 'reformaplus-v2.0.1';
+// v2.0.2 — hotfix Android 12 Chrome 151: NUNCA redireciona /index.html → / no SW.
+//   HTTP 200 sempre retorna para / E /index.html (ambos servem o mesmo HTML da shell).
+//   A limpeza da URL acontece client-side no <head> do index.html com history.replaceState.
+const CACHE_NAME = 'reformaplus-v2.0.2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -115,7 +117,7 @@ self.addEventListener('fetch', (event) => {
       return fetch(req).then((response) => {
         if (!response || response.status !== 200 || response.type !== 'basic') return response;
         const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then((cache) => { try { cache.put(req, responseToCache); } catch (_) {} });
+        caches.open(CACHE_NAME).then((cache) => { try { cache.put(req, responseToCache); } catch (_) { } });
         return response;
       }).catch(() => {
         if (req.headers.get('accept')?.includes('text/html')) {

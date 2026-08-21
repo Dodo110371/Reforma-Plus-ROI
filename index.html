@@ -6,6 +6,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>ReformaPlus ROI - Gestão de Reforma & Flip Imobiliário</title>
 
+  <!-- Limpeza de URL: permite que /index.html retorne 200 OK (obrigatório para launcher PWA Android)
+       mas ainda exibe "/" limpo na barra de endereços sem recarregar a página. -->
+  <script>
+    (function () {
+      try {
+        var p = window.location.pathname;
+        if (p && (p === '/index.html' || p.endsWith('/index.html')) && window.history && window.history.replaceState) {
+          var clean = p.replace(/\/index\.html$/i, '/') || '/';
+          window.history.replaceState({}, document.title, clean + window.location.search + window.location.hash);
+        }
+      } catch (e) { /* ignore */ }
+    })();
+  </script>
+
   <!-- PWA Config & Meta -->
   <link rel="manifest" href="./manifest.json">
   <meta name="theme-color" content="#10b981">
