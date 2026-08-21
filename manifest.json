@@ -2,26 +2,44 @@
   "name": "ReformaPlus ROI - Gestão de Reforma e Flip Imobiliário",
   "short_name": "ReformaPlus",
   "description": "Controle financeiro, gestão de materiais, serviços e cálculo de ROI para reformas e revenda imobiliária.",
-  "id": "/",
+  "version": "2.0.3",
+  "id": "/?v=2.0.3",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "window-control-overlay", "minimal-ui", "browser"],
+  "display_override": [
+    "standalone",
+    "window-control-overlay",
+    "minimal-ui",
+    "browser"
+  ],
   "background_color": "#ffffff",
   "theme_color": "#10b981",
   "orientation": "portrait-primary",
   "lang": "pt-BR",
   "dir": "ltr",
-  "categories": ["business", "finance", "productivity"],
+  "categories": [
+    "business",
+    "finance",
+    "productivity"
+  ],
   "launch_handler": {
     "client_mode": "auto",
     "route_to": "auto",
     "navigate_existing_client": "always"
   },
+  "url_handlers": [
+    {
+      "origin": "https://reform-plus-roi.vercel.app"
+    },
+    {
+      "origin": "https://*.reform-plus-roi.vercel.app"
+    }
+  ],
   "protocol_handlers": [
     {
       "protocol": "web+reformaplus",
-      "url": "/?launch=%s"
+      "url": "/?deeplink=%s"
     }
   ],
   "edge_side_panel": {
@@ -29,16 +47,27 @@
   },
   "file_handlers": [
     {
-      "action": "/?launch=receipts&utm_source=pwa_file_handler",
+      "action": "/?deeplink=receipts&utm_source=pwa_file_handler",
       "accept": {
-        "image/*": [".png", ".jpg", ".jpeg", ".webp", ".gif"]
+        "image/*": [
+          ".png",
+          ".jpg",
+          ".jpeg",
+          ".webp",
+          ".gif"
+        ]
       },
       "name": "Recibos e Fotos da Obra",
-      "icons": [{ "src": "./assets/icons/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "./assets/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ],
   "share_target": {
-    "action": "/?launch=share_target&utm_source=pwa_share",
+    "action": "/?deeplink=share_target&utm_source=pwa_share",
     "method": "POST",
     "enctype": "multipart/form-data",
     "params": {
@@ -46,7 +75,13 @@
       "text": "text",
       "url": "url",
       "files": [
-        { "name": "photos", "accept": ["image/*"], "maxSize": 2621440 }
+        {
+          "name": "photos",
+          "accept": [
+            "image/*"
+          ],
+          "maxSize": 2621440
+        }
       ]
     }
   },
@@ -54,23 +89,74 @@
     {
       "name": "Novo Lançamento",
       "short_name": "Lançamentos",
-      "description": "Criar novo lançamento de despesa ou receita",
-      "url": "/?launch=despesas&utm_source=pwa_shortcut",
-      "icons": [{ "src": "./assets/icons/icon-192.png", "sizes": "192x192" }]
+      "description": "Criar novo lançamento de despesa ou receita rapidamente",
+      "url": "/?deeplink=despesas_new&utm_source=pwa_shortcut",
+      "icons": [
+        {
+          "src": "./assets/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Dashboard ROI",
       "short_name": "Dashboard",
-      "description": "Visão geral do projeto atual",
-      "url": "/?launch=dashboard&utm_source=pwa_shortcut",
-      "icons": [{ "src": "./assets/icons/icon-192.png", "sizes": "192x192" }]
+      "description": "Visão geral do projeto atual e métricas",
+      "url": "/?deeplink=dashboard&utm_source=pwa_shortcut",
+      "icons": [
+        {
+          "src": "./assets/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Meus Imóveis",
       "short_name": "Imóveis",
       "description": "Gerenciar lista de imóveis cadastrados",
-      "url": "/?launch=imovels&utm_source=pwa_shortcut",
-      "icons": [{ "src": "./assets/icons/icon-192.png", "sizes": "192x192" }]
+      "url": "/?deeplink=imovels&utm_source=pwa_shortcut",
+      "icons": [
+        {
+          "src": "./assets/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Etapas da Obra",
+      "short_name": "Etapas",
+      "description": "Acompanhar cronograma e evolução das fases",
+      "url": "/?deeplink=etapas&utm_source=pwa_shortcut",
+      "icons": [
+        {
+          "src": "./assets/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Relatórios",
+      "short_name": "Relatórios",
+      "description": "Exportar CSV, PDF, Excel e Análises",
+      "url": "/?deeplink=relatorios&utm_source=pwa_shortcut",
+      "icons": [
+        {
+          "src": "./assets/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Configurações",
+      "short_name": "Ajustes",
+      "description": "Ajustes do imóvel ativo e sistema",
+      "url": "/?deeplink=configuracoes&utm_source=pwa_shortcut",
+      "icons": [
+        {
+          "src": "./assets/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ],
   "icons": [
@@ -78,13 +164,13 @@
       "src": "./assets/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any maskable monochrome"
     },
     {
       "src": "./assets/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any maskable monochrome"
     }
   ]
 }

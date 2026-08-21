@@ -51,9 +51,93 @@ class AppController {
     try { this.bindEvents(); } catch (err) { console.error('[App] ERRO CRÍTICO em bindEvents:', err); }
     try { this.renderAllViews(); } catch (err) { console.error('[App] ERRO em renderAllViews (bindEvents já rodou):', err); }
 
+    try { this.handleDeepLink(); } catch (err) { console.warn('[App] handleDeepLink falhou:', err); }
+
     setTimeout(() => {
       try { if (AuthManager.isAuthenticated()) SupabaseSync.processQueue(); } catch (_) { }
     }, 1500);
+  }
+
+  /**
+   * Router Deep Link: disparado por atalhos PWA (shortcuts),
+   * Web Share Target, File Handler, Protocol Handler (web+reformaplus://)
+   * e URLs diretas tipo reform-plus-roi.vercel.app/#/imovels.
+   *
+   * Parâmetros reconhecidos (?query ou #hash ou /pathname):
+   *  - ?deeplink=<aba>   (ex: ?deeplink=imovels)
+   *  - ?launch=<aba>     (compatibilidade com apps antigos)
+   *  - #/<aba>           (ex: #/dashboard)
+   *  - pathname direto: /dashboard /imovels /despesas_new /lancamentos/novo etc
+   *
+   * Valores <aba> válidos:
+   *  home inicio | dashboard | imovels properties | despesas lancamentos despesas_new lancamentos_new lancamentos/novo |
+   *  etapas stages | relatorios reports | configuracoes ajustes | sobre termos privacidade |
+   *  receipts recibos | share_target share
+   */
+  static handleDeepLink() {
+    const url = new URL(window.location.href);
+    const hashes = (url.hash || '').replace(/^#\/?/, '').split('/').filter(Boolean);
+    const queryDeeplink = url.searchParams.get('deeplink') || url.searchParams.get('launch');
+
+    let match = null;
+
+    if (queryDeeplink) {
+      match = String(queryDeeplink).trim().toLowerCase();
+    } else if (hashes.length) {
+      match = hashes.join('_').toLowerCase();
+    } else {
+      const pathname = url.pathname || '/';
+      const clean = pathname.replace(/\/index\.html?$/i, '').replace(/^\/+|\/+$/g, '').toLowerCase();
+      if (clean) match = clean.replace(/\//g, '_');
+    }
+
+    if (!match) return;
+
+    const router = new Map([
+      [/^(home|inicio|)$/, () => { AppController.goHome(); }],
+      [/^dashboard$/, () => { AppController.switchTab('dashboard'); AppController.scrollToTop(); }],
+      [/^(imovels|properties|imoveis|property)$/, () => { AppController.switchTab('imovels'); AppController.scrollToTop(); }],
+      [/^(despesas|lancamentos|transactions|expenses)$/, () => { AppController.switchTab('despesas'); AppController.scrollToTop(); }],
+      [/^(despesas_new|lancamentos_new|lancamentos_novo|novo_lancamento|transactions_new)$/, () => {
+        AppController.switchTab('despesas');
+        setTimeout(() => {
+          AppController.scrollToTop();
+          const f = document.getElementById('newExpenseForm');
+          if (f) {
+            const desc = document.getElementById('expenseDescription');
+            if (desc) setTimeout(() => desc.focus(), 250);
+            f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 150);
+      }],
+      [/^(etapas|stages|fases|phases)$/, () => { AppController.switchTab('etapas'); AppController.scrollToTop(); }],
+      [/^(relatorios|reports|relatorio)$/, () => { AppController.switchTab('relatorios'); AppController.scrollToTop(); }],
+      [/^(configuracoes|ajustes|settings|preferencias|config|property|property_info|info)$/, () => { AppController.switchTab('configuracoes'); AppController.scrollToTop(); }],
+      [/^sobre$/, () => { AppController.switchTabAndScrollTo('sobre','footer-info'); }],
+      [/^(termos|terms|termos_uso)$/, () => { AppController.switchTabAndScrollTo('termos','footer-info'); }],
+      [/^(privacidade|privacy|privacidade_dados)$/, () => { AppController.switchTabAndScrollTo('privacidade','footer-info'); }],
+      [/^(recibos|receipts|anexos)$/, () => { AppController.switchTab('despesas'); AppController.scrollToTop(); }],
+      [/^(share_target|share|compartilhar|compartilha)$/, () => {
+        AppController.switchTab('despesas');
+        AppController.showToast('📤 Arquivo(s) recebidos via Compartilhar (Web Share Target). Preencha os dados do lançamento e salve.','success',5000);
+        setTimeout(() => {
+          AppController.scrollToTop();
+          document.getElementById('newExpenseForm')?.scrollIntoView({behavior:'smooth',block:'start'});
+        },180);
+      }]
+    ]);
+
+    for (const [pattern, handler] of router) {
+      if (pattern.test(match)) {
+        handler();
+        // limpa a URL para não reexecutar em refresh
+        try {
+          const clean = window.location.pathname + (window.location.search && !queryDeeplink ? window.location.search : '');
+          window.history.replaceState({}, document.title, clean);
+        } catch(_) {}
+        return;
+      }
+    }
   }
 
   static applySavedTheme() {
