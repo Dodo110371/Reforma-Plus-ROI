@@ -11,13 +11,11 @@
     {
       "source": "/home",
       "destination": "/",
-      "permanent": false,
       "statusCode": 302
     },
     {
       "source": "/inicio",
       "destination": "/",
-      "permanent": false,
       "statusCode": 302
     }
   ],
