@@ -85,10 +85,56 @@ class AppController {
       e.preventDefault();
       this.deferredInstallPrompt = e;
       const installBtn = document.getElementById('btnInstallPWA');
-      if (installBtn) {
+      if (installBtn && !AppController._isStandaloneMode()) {
         installBtn.style.display = 'inline-flex';
       }
     });
+
+    // Fallback: se beforeinstallprompt NÃO disparar mas PWA é compatível (Chrome/Edge),
+    // mostra botão com instrução para instalar manualmente (3 pontinhos → Instalar app).
+    window.addEventListener('load', () => {
+      const installBtn = document.getElementById('btnInstallPWA');
+      if (!installBtn) return;
+
+      // Se já estiver rodando como app instalado → não mostra botão nunca
+      if (AppController._isStandaloneMode()) {
+        installBtn.style.display = 'none';
+        return;
+      }
+
+      // Se prompt já chegou e botão já está visível → ignora
+      if (installBtn.style.display === 'inline-flex' || this.deferredInstallPrompt) return;
+
+      const isChromiumDesktop = /Chrome|Edg|Edge|Brave|OPR|Vivaldi/i.test(navigator.userAgent)
+        && !/Mobile|Android|iPhone|iPad/i.test(navigator.userAgent);
+
+      const isChromiumMobile = /Chrome|Edg|SamsungBrowser|OPR/i.test(navigator.userAgent)
+        && /Android/i.test(navigator.userAgent);
+
+      // Mostra botão, mas instrução sobre como instalar manual se deferred não chegar
+      setTimeout(() => {
+        if (!this.deferredInstallPrompt && (isChromiumDesktop || isChromiumMobile)) {
+          installBtn.style.display = 'inline-flex';
+          installBtn.addEventListener('click', () => {
+            if (this.deferredInstallPrompt) return;
+            this.showToast(
+              isChromiumMobile
+                ? 'Clique em ⋮ (3 pontinhos) no navegador → \"Instalar app\" para adicionar à tela inicial.'
+                : 'Para instalar: clique em ⋯ (3 pontinhos) no canto superior direito → \"Instalar aplicativo ReformaPlus ROI\".',
+              'info',
+              6000
+            );
+          }, { once: true });
+        }
+      }, 2500);
+    });
+  }
+
+  // Retorna true se o app está rodando como PWA instalado (sem barra do navegador)
+  static _isStandaloneMode() {
+    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+      || (window.navigator && 'standalone' in window.navigator && window.navigator.standalone === true)
+      || document.referrer.includes('android-app://');
   }
 
   static bindEvents() {
@@ -796,8 +842,8 @@ class AppController {
     document.getElementById('valServices').textContent = MetricsManager.formatCurrency(metrics.totalServices);
     document.getElementById('valTaxes').textContent = MetricsManager.formatCurrency(metrics.totalTaxesFees);
 
-    // Renderiza Gráfico por Categoria
-    MetricsManager.renderCustomBarChart('chartCategory', metrics.categoryBreakdown, metrics.totalRenovationCost);
+    // Renderiza Gráfico por Categoria (Pizza / Donut) + Ambiente (Barras)
+    MetricsManager.renderPieDonutChart('chartCategory', metrics.categoryBreakdown, { centerLabelTop: 'Reforma' });
     MetricsManager.renderCustomBarChart('chartRoom', metrics.roomBreakdown, metrics.totalRenovationCost);
   }
 

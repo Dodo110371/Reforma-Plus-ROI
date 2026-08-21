@@ -2,11 +2,44 @@
   "name": "ReformaPlus ROI - Gestão de Reforma e Flip Imobiliário",
   "short_name": "ReformaPlus",
   "description": "Controle financeiro, gestão de materiais, serviços e cálculo de ROI para reformas e revenda imobiliária.",
-  "start_url": "./index.html",
+  "id": "/?v=2.0.1",
+  "start_url": "/?utm_source=pwa&utm_medium=homescreen",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
+  "display_override": ["standalone", "window-control-overlay", "minimal-ui"],
+  "background_color": "#ffffff",
   "theme_color": "#10b981",
-  "orientation": "any",
+  "orientation": "portrait-primary",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "categories": ["business", "finance", "productivity"],
+  "launch_handler": {
+    "client_mode": "auto"
+  },
+  "prefer_related_applications": false,
+  "shortcuts": [
+    {
+      "name": "Novo Lançamento",
+      "short_name": "Lançamentos",
+      "description": "Criar novo lançamento de despesa ou receita",
+      "url": "/?launch=despesas&utm_source=pwa_shortcut",
+      "icons": [{ "src": "./assets/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Dashboard ROI",
+      "short_name": "Dashboard",
+      "description": "Visão geral do projeto atual",
+      "url": "/?launch=dashboard&utm_source=pwa_shortcut",
+      "icons": [{ "src": "./assets/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Meus Imóveis",
+      "short_name": "Imóveis",
+      "description": "Gerenciar lista de imóveis cadastrados",
+      "url": "/?launch=imovels&utm_source=pwa_shortcut",
+      "icons": [{ "src": "./assets/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
   "icons": [
     {
       "src": "./assets/icons/icon-192.png",

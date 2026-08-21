@@ -36,12 +36,14 @@ const DEFAULT_PROPERTY = {
 };
 
 const DEFAULT_PHASES = [
-  { id: 'p1', name: 'Demolição e Limpeza', status: 'concluido', budget: 4500.00 },
-  { id: 'p2', name: 'Infraestrutura (Elétrica & Hidráulica)', status: 'concluido', budget: 18500.00 },
-  { id: 'p3', name: 'Alvenaria e Gesso', status: 'em_andamento', budget: 12000.00 },
-  { id: 'p4', name: 'Pisos e Revestimentos', status: 'em_andamento', budget: 25000.00 },
-  { id: 'p5', name: 'Pintura e Fachada', status: 'pendente', budget: 14000.00 },
-  { id: 'p6', name: 'Marcenaria e Iluminação Final', status: 'pendente', budget: 16000.00 }
+  { id: 'p1', name: 'Planejamento e Projeto', status: 'concluido', budget: 6500.00 },
+  { id: 'p2', name: 'Demolição e Limpeza', status: 'concluido', budget: 4500.00 },
+  { id: 'p3', name: 'Infraestrutura (Elétrica & Hidráulica)', status: 'concluido', budget: 18500.00 },
+  { id: 'p4', name: 'Alvenaria e Gesso', status: 'em_andamento', budget: 12000.00 },
+  { id: 'p5', name: 'Pisos e Revestimentos', status: 'em_andamento', budget: 25000.00 },
+  { id: 'p6', name: 'Pintura e Fachada', status: 'pendente', budget: 14000.00 },
+  { id: 'p7', name: 'Marcenaria e Iluminação Final', status: 'pendente', budget: 16000.00 },
+  { id: 'p8', name: 'Limpeza Final e Entrega das Chaves', status: 'pendente', budget: 3500.00 }
 ];
 
 const DEFAULT_EXPENSES = [
