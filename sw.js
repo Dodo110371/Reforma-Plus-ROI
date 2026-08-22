@@ -1,7 +1,7 @@
 // Service Worker para suporte Offline e PWA do ReformaPlus ROI
-// v2.0.5 — manifest v2.0.5 compatível (maskable icon 512, 11 tamanhos de ícones, 3 shortcuts)
-// bump version = reset cache após atualizações
-const CACHE_NAME = 'reformaplus-v2.0.5';
+// v2.0.10 — manifest v2.0.10 MINIMO (paths ícones ABSOLUTOS + launch_handler /
+//        manifest_version / short_name_aliases / description_override removidos)
+const CACHE_NAME = 'reformaplus-v2.0.10';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -43,7 +43,7 @@ self.addEventListener('install', (event) => {
       .then(() => caches.open(CACHE_NAME).then((cache) => {
         // Garante shell básica sempre no cache (fallback ultra seguro)
         const critical = ['/', '/index.html', '/manifest.json', '/assets/icons/icon-192.png', '/assets/icons/icon-512.png'];
-        return Promise.all(critical.map(u => cache.add(new Request(u, { mode: 'no-cors' })).catch(() => {})));
+        return Promise.all(critical.map(u => cache.add(new Request(u, { mode: 'no-cors' })).catch(() => { })));
       }))
       .catch((err) => console.warn('[SW] install warning:', err))
   );
@@ -54,14 +54,14 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((keys) => Promise.all(
       keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
     ))
-    .then(() => self.clients.claim())
-    .then(() => {
-      if (self.registration && self.registration.navigationPreload) {
-        return self.registration.navigationPreload.enable()
-          .then(() => self.registration.navigationPreload.setHeaderValue('X-ReformaPlus-PWA', '1'))
-          .catch(() => {});
-      }
-    })
+      .then(() => self.clients.claim())
+      .then(() => {
+        if (self.registration && self.registration.navigationPreload) {
+          return self.registration.navigationPreload.enable()
+            .then(() => self.registration.navigationPreload.setHeaderValue('X-ReformaPlus-PWA', '1'))
+            .catch(() => { });
+        }
+      })
   );
 });
 
@@ -77,7 +77,7 @@ self.addEventListener('fetch', (event) => {
         .then((resp) => {
           if (!resp || resp.status !== 200 || resp.type !== 'basic') return resp;
           const clone = resp.clone();
-          caches.open(CACHE_NAME).then((cache) => { try { cache.put(req, clone); } catch (_) {} });
+          caches.open(CACHE_NAME).then((cache) => { try { cache.put(req, clone); } catch (_) { } });
           return resp;
         })
         .catch(async () => {

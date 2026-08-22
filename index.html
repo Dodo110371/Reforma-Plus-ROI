@@ -1904,77 +1904,34 @@
             btn.addEventListener('click', function (ev) {
               ev.preventDefault();
               ev.stopPropagation();
-              // Se AppController já existe, chama _handleInstallClick.
-              // Se não (carregamento muito rápido), cria o modal autocontido diretamente.
+              // 1) PRIORIDADE 1: AppController fluxo completo v2.0.9 com _forceDirectInstallAttempt
               if (window.AppController && typeof window.AppController._handleInstallClick === 'function') {
                 try { window.AppController._handleInstallClick(); return; } catch (_) { }
               }
+              // 2) Fallback ultra seguro: prompt direto global state se existir
+              try {
+                const globalP = (window.__INSTALL_STATE__ && window.__INSTALL_STATE__.prompt);
+                if (globalP) {
+                  globalP.prompt();
+                  window.__INSTALL_STATE__.prompt = null;
+                  return;
+                }
+              } catch (_) { }
+              // 3) Último caso: TOAST orientativo (SEM MODAL PASSO-A-PASSO — exigência do usuário)
               const ua = (navigator.userAgent || '') + ' ' + (navigator.vendor || '');
               const isMobile = /Android|iPhone|iPad|iPod/i.test(ua);
               const isMotorola = /motorola|moto g|moto g\d|myux| XT| moto |lenovo moto/i.test(ua);
-              const msgMotorola = isMotorola
-                ? `<div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:12px;padding:14px 16px;margin:16px 0 6px 0;line-height:1.6">
-                    <div style="font-weight:700;color:#b45309;margin-bottom:6px">⚠️ Motorola / Moto G22 detectado</div>
-                    <div style="color:#78350f">O ícone não aparece automaticamente na tela inicial.<br><b>USE O MÉTODO 1</b> abaixo (3 pontinhos → adicionar tela inicial).</div>
-                   </div>` : '';
-              const stepsMobile = `
-                <div style="padding:4px 2px">
-                  <h3 style="margin:4px 0 12px 0;color:#065f46">📲 Instalar no Celular</h3>
-                  <h4 style="margin:18px 0 8px 0;color:#0f766e">✅ Método 1 — SEMPRE FUNCIONA (Recomendado Motorola)</h4>
-                  <ol style="padding-left:1.4rem;line-height:1.9;margin:0">
-                    <li>Toque em <b>3 pontinhos ⋮</b> no canto superior DIREITO do Chrome.</li>
-                    <li>Role para baixo e toque em <b>📲 Adicionar à tela inicial</b> OU <b>Instalar app</b>.</li>
-                    <li>Toque em <b>Adicionar</b> (botão azul) → toque em <b>Adicionar automaticamente</b>.</li>
-                    <li>Volte para a Tela Inicial → o ícone <b>ReformaPlus ROI</b> aparece agora.</li>
-                  </ol>
-                  <h4 style="margin:20px 0 8px 0;color:#0f766e">🔎 Método 2 — Se já instalou e não apareceu</h4>
-                  <ol style="padding-left:1.4rem;line-height:1.9;margin:0">
-                    <li>Arraste a barra de status → Pesquisa 🔍 do sistema Android.</li>
-                    <li>Digite: <b>ReformaPlus</b>.</li>
-                    <li>Segure 2 segundos no resultado → <b>Adicionar à tela inicial</b> / arraste pro topo.</li>
-                  </ol>
-                  ${msgMotorola}
-                </div>`;
-              const stepsDesktop = `
-                <div style="padding:4px 2px">
-                  <h3 style="margin:4px 0 12px 0;color:#065f46">💻 Instalar no Computador (Chrome / Edge)</h3>
-                  <ol style="padding-left:1.4rem;line-height:1.9;margin:0">
-                    <li>Clique em <b>⋯ 3 pontinhos</b> (canto superior direito do Chrome/Edge).</li>
-                    <li>Clique em <b>Instalar aplicativo ReformaPlus ROI</b> → clique em <b>Instalar</b>.</li>
-                    <li>Atalho aparece no Menu Iniciar / Dock automaticamente.</li>
-                  </ol>
-                </div>`;
-              // Cria modal autocontido overlay (mesmo algoritmo de _openInstallModal)
-              try { document.getElementById('rp-install-modal-overlay')?.remove(); } catch (_) { }
-              const overlay = document.createElement('div');
-              overlay.id = 'rp-install-modal-overlay';
-              overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,0.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:18px;';
-              const modal = document.createElement('div');
-              modal.style.cssText = 'background:#fff;border-radius:20px;max-width:560px;width:100%;box-shadow:0 30px 80px rgba(15,23,42,0.25);overflow:hidden;color:#0f172a;';
-              const header = document.createElement('div');
-              header.style.cssText = 'padding:18px 20px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;background:#ecfdf5';
-              const h3 = document.createElement('h3');
-              h3.style.cssText = 'margin:0;font-size:1.1rem;color:#065f46'; h3.textContent = '📲 Instalar ReformaPlus ROI';
-              const x = document.createElement('button');
-              x.innerHTML = '✕';
-              x.style.cssText = 'border:0;background:transparent;font-size:1.4rem;color:#065f46;cursor:pointer;padding:2px 8px;border-radius:8px;';
-              const closeFn = function () { try { document.getElementById('rp-install-modal-overlay')?.remove(); } catch (_) { } };
-              x.onclick = closeFn;
-              header.appendChild(h3); header.appendChild(x);
-              const body = document.createElement('div');
-              body.style.cssText = 'padding:18px 20px;max-height:72vh;overflow-y:auto;font-size:0.95rem;color:#1e293b';
-              body.innerHTML = isMobile ? stepsMobile : stepsDesktop;
-              const footer = document.createElement('div');
-              footer.style.cssText = 'padding:14px 20px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:10px;background:#f8fafc';
-              const btnX = document.createElement('button');
-              btnX.textContent = 'Entendido ✅';
-              btnX.style.cssText = 'padding:10px 18px;border-radius:9999px;border:0;background:#10b981;color:#fff;font-weight:700;cursor:pointer;font-size:0.95rem;box-shadow:0 10px 20px rgba(16,185,129,0.2)';
-              btnX.onclick = closeFn;
-              footer.appendChild(btnX);
-              modal.appendChild(header); modal.appendChild(body); modal.appendChild(footer);
-              overlay.appendChild(modal);
-              overlay.onclick = function (e) { if (e.target === overlay) closeFn(); };
-              document.body.appendChild(overlay);
+              const msg = isMobile
+                ? ('📲 Toque nos 3 pontinhos ⋮ → "Instalar app" → Adicionar automaticamente.' +
+                  (isMotorola ? ' ⚠️ Motorola: use Adicionar automaticamente.' : ''))
+                : '💻 Clique em ⋯ 3 pontinhos → "Instalar aplicativo ReformaPlus ROI" → Instalar.';
+              try {
+                if (window.AppController && window.AppController.showToast) {
+                  window.AppController.showToast(msg, 'warning', 22000);
+                } else {
+                  alert(msg);
+                }
+              } catch (_) { alert(msg); }
             });
           }
         }
