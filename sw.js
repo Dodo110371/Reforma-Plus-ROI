@@ -1,119 +1,100 @@
 // Service Worker para suporte Offline e PWA do ReformaPlus ROI
-// v2.0.2 — hotfix Android 12 Chrome 151: NUNCA redireciona /index.html → / no SW.
-//   HTTP 200 sempre retorna para / E /index.html (ambos servem o mesmo HTML da shell).
-//   A limpeza da URL acontece client-side no <head> do index.html com history.replaceState.
-const CACHE_NAME = 'reformaplus-v2.0.2';
+// v2.0.5 — manifest v2.0.5 compatível (maskable icon 512, 11 tamanhos de ícones, 3 shortcuts)
+// bump version = reset cache após atualizações
+const CACHE_NAME = 'reformaplus-v2.0.5';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/assets/css/style.css',
+  '/assets/js/app.js',
   '/assets/js/storage.js',
   '/assets/js/metrics.js',
-  '/assets/js/reports.js',
-  '/assets/js/supabaseClient.js',
   '/assets/js/supabaseSync.js',
   '/assets/js/auth.js',
-  '/assets/js/app.js',
+  '/assets/js/reports.js',
   '/assets/js/env.js',
+  '/assets/icons/icon-48.png',
+  '/assets/icons/icon-72.png',
+  '/assets/icons/icon-96.png',
+  '/assets/icons/icon-128.png',
+  '/assets/icons/icon-144.png',
+  '/assets/icons/icon-152.png',
   '/assets/icons/icon-192.png',
-  '/assets/icons/icon-512.png'
+  '/assets/icons/icon-384.png',
+  '/assets/icons/icon-512.png',
+  '/assets/icons/icon-maskable-512.png'
 ];
 
-// Chrome/Firefox/Edge aceitam navigation preload (acelera 1ª carga offline)
-if ('navigationPreload' in self.registration) {
-  self.addEventListener('activate', () => {
-    self.registration.navigationPreload.enable().catch(() => { /* ignora */ });
-  });
-}
-
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE).catch((err) => {
-        console.warn('[SW] cache.addAll parcial falhou:', err && err.message);
-        // Fallback: se algum asset falhou (ex: env.js ainda não gerado), cache o mínimo necessário para o PWA abrir
-        return cache.addAll(['/', '/index.html', '/manifest.json']).catch(() => undefined);
-      });
-    })
-  );
   self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => {
+        // Tenta cachear todos, mas se algum falhar (ex: env.js não existe no primeiro bootstrap)
+        // não aborta a instalação inteira — salva o que for possível.
+        return Promise.all(ASSETS_TO_CACHE.map(url => {
+          const req = new Request(url, { credentials: 'same-origin', mode: 'no-cors' });
+          return cache.add(req).catch((err) => {
+            console.warn('[SW] Não foi possível pré-cachear:', url, err?.message || err);
+            return Promise.resolve();
+          });
+        }));
+      })
+      .then(() => caches.open(CACHE_NAME).then((cache) => {
+        // Garante shell básica sempre no cache (fallback ultra seguro)
+        const critical = ['/', '/index.html', '/manifest.json', '/assets/icons/icon-192.png', '/assets/icons/icon-512.png'];
+        return Promise.all(critical.map(u => cache.add(new Request(u, { mode: 'no-cors' })).catch(() => {})));
+      }))
+      .catch((err) => console.warn('[SW] install warning:', err))
+  );
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.map((key) => {
-          if (key !== CACHE_NAME) {
-            return caches.delete(key);
-          }
-        })
-      );
+    caches.keys().then((keys) => Promise.all(
+      keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
+    ))
+    .then(() => self.clients.claim())
+    .then(() => {
+      if (self.registration && self.registration.navigationPreload) {
+        return self.registration.navigationPreload.enable()
+          .then(() => self.registration.navigationPreload.setHeaderValue('X-ReformaPlus-PWA', '1'))
+          .catch(() => {});
+      }
     })
   );
-  self.clients.claim();
 });
-
-// Helper: resolve a página shell ("/" ou "/index.html") sem duplicatas
-function getShellFromCache() {
-  return caches.open(CACHE_NAME).then(async (cache) => {
-    const cachedIndex = await cache.match('/index.html');
-    if (cachedIndex) return cachedIndex;
-    const cachedRoot = await cache.match('/');
-    if (cachedRoot) return cachedRoot;
-    throw new Error('shell not cached');
-  });
-}
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
-  const url = new URL(req.url);
 
-  // Ignora esquemas não-HTTP (chrome-extension, data, etc) e métodos não-GET
-  if (!['http:', 'https:'].includes(url.protocol) || req.method !== 'GET') {
-    return;
-  }
+  if (req.method !== 'GET') return;
 
-  // Ignora pedidos Supabase CDN / terceiros (cache do navegador resolve)
-  if (req.mode !== 'navigate' && url.origin !== location.origin) {
-    return;
-  }
-
-  // --- NAVEGAÇÃO (PWA launcher: start_url "/" ou qualquer clique interno) ---
-  if (req.mode === 'navigate') {
+  // Navegação SPA / HTML pages → network first, fallback cache, fallback shell offline
+  if (req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html')) {
     event.respondWith(
-      // Tenta rede primeiro com navigationPreload se disponível
-      Promise.resolve(event.preloadResponse)
-        .then((preload) => preload || fetch(req, { cache: 'no-cache' }).catch(() => null))
-        .then((networkResp) => {
-          if (networkResp && networkResp.ok) {
-            // Se veio 30x redirect para "/" mantém a shell
-            const cacheCopy = networkResp.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              try { cache.put(req, cacheCopy); } catch (_) { /* ignora */ }
-              if (url.pathname === '/' || url.pathname === '' || url.pathname === '/index.html') {
-                try { cache.put('/index.html', networkResp.clone()); cache.put('/', networkResp.clone()); } catch (_) { /* ignora */ }
-              }
-            });
-            return networkResp;
-          }
-          throw new Error('navigate offnet');
+      fetch(req)
+        .then((resp) => {
+          if (!resp || resp.status !== 200 || resp.type !== 'basic') return resp;
+          const clone = resp.clone();
+          caches.open(CACHE_NAME).then((cache) => { try { cache.put(req, clone); } catch (_) {} });
+          return resp;
         })
-        .catch(() => {
-          // OFFLINE: retorna shell "/" se ela existir (não /index.html, que Vercel limpa)
-          return getShellFromCache().catch(() =>
-            caches.match('/').then((m) => m || caches.match('/index.html') || new Response('Offline, sem shell.', { status: 503, headers: { 'Content-Type': 'text/plain' } }))
-          );
+        .catch(async () => {
+          const shell = await getShellFromCache();
+          if (shell) return shell;
+          // fallback last: retorna index.html genérico offline
+          const fallback = await caches.match('/index.html').catch(() => null);
+          return fallback || caches.match('/');
         })
     );
     return;
   }
 
-  // --- ASSETS / DADOS ---
+  // Assets staticos: cache first
   event.respondWith(
-    caches.match(req).then((cachedResponse) => {
-      if (cachedResponse) return cachedResponse;
+    caches.match(req).then((cached) => {
+      if (cached) return cached;
       return fetch(req).then((response) => {
         if (!response || response.status !== 200 || response.type !== 'basic') return response;
         const responseToCache = response.clone();
@@ -121,17 +102,23 @@ self.addEventListener('fetch', (event) => {
         return response;
       }).catch(() => {
         if (req.headers.get('accept')?.includes('text/html')) {
-          return getShellFromCache().catch(() => new Response('Offline', { status: 503 }));
+          return getShellFromCache();
         }
-        return new Response('Offline', { status: 503 });
+        return new Response('', { status: 408, statusText: 'Offline' });
       });
     })
   );
 });
 
-// App instalado → focus se clicado de novo (launch_handler navigate_existing_client)
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
-});
+async function getShellFromCache() {
+  const cache = await caches.open(CACHE_NAME);
+  const matchA = await cache.match('/index.html');
+  if (matchA) return matchA;
+  const matchB = await cache.match('/');
+  if (matchB) return matchB;
+  // fallback genérico, aceita keys sem URL completa
+  const allKeys = await cache.keys();
+  const shell = allKeys.find(k => /index\.html|\/$/.test(k.url));
+  if (shell) return cache.match(shell);
+  return null;
+}

@@ -113,17 +113,17 @@ class AppController {
       [/^(etapas|stages|fases|phases)$/, () => { AppController.switchTab('etapas'); AppController.scrollToTop(); }],
       [/^(relatorios|reports|relatorio)$/, () => { AppController.switchTab('relatorios'); AppController.scrollToTop(); }],
       [/^(configuracoes|ajustes|settings|preferencias|config|property|property_info|info)$/, () => { AppController.switchTab('configuracoes'); AppController.scrollToTop(); }],
-      [/^sobre$/, () => { AppController.switchTabAndScrollTo('sobre','footer-info'); }],
-      [/^(termos|terms|termos_uso)$/, () => { AppController.switchTabAndScrollTo('termos','footer-info'); }],
-      [/^(privacidade|privacy|privacidade_dados)$/, () => { AppController.switchTabAndScrollTo('privacidade','footer-info'); }],
+      [/^sobre$/, () => { AppController.switchTabAndScrollTo('sobre', 'footer-info'); }],
+      [/^(termos|terms|termos_uso)$/, () => { AppController.switchTabAndScrollTo('termos', 'footer-info'); }],
+      [/^(privacidade|privacy|privacidade_dados)$/, () => { AppController.switchTabAndScrollTo('privacidade', 'footer-info'); }],
       [/^(recibos|receipts|anexos)$/, () => { AppController.switchTab('despesas'); AppController.scrollToTop(); }],
       [/^(share_target|share|compartilhar|compartilha)$/, () => {
         AppController.switchTab('despesas');
-        AppController.showToast('📤 Arquivo(s) recebidos via Compartilhar (Web Share Target). Preencha os dados do lançamento e salve.','success',5000);
+        AppController.showToast('📤 Arquivo(s) recebidos via Compartilhar (Web Share Target). Preencha os dados do lançamento e salve.', 'success', 5000);
         setTimeout(() => {
           AppController.scrollToTop();
-          document.getElementById('newExpenseForm')?.scrollIntoView({behavior:'smooth',block:'start'});
-        },180);
+          document.getElementById('newExpenseForm')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 180);
       }]
     ]);
 
@@ -134,7 +134,7 @@ class AppController {
         try {
           const clean = window.location.pathname + (window.location.search && !queryDeeplink ? window.location.search : '');
           window.history.replaceState({}, document.title, clean);
-        } catch(_) {}
+        } catch (_) { }
         return;
       }
     }
@@ -159,66 +159,183 @@ class AppController {
 
   static registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js')
+      navigator.serviceWorker.register('./sw.js?v=205')
         .then((reg) => console.log('Service Worker registrado com sucesso:', reg.scope))
         .catch((err) => console.warn('Erro ao registrar Service Worker:', err));
     }
 
-    // Evento de instalação do PWA
+    // --- PWA INSTALL PIPELINE v2.0.5 (Compatibilidade 100% Chrome 151 Android 12 Motorola) ---
+    // Estratégia 3 camadas: prompt nativo → fallback deferred install → fallback manual Motorola
+
+    // Reset de segurança: se Chrome "lembrar" de um app instalado que foi removido,
+    // permite disparar beforeinstallprompt de novo (reseta cache ChromeInstaller).
+    try { localStorage.removeItem('reformaplus_pwa_installed_v2'); } catch (_) { }
+
+    // 1) Prompt nativo Chrome (beforeinstallprompt): SEMPRE dispara o botão laranja
     window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      this.deferredInstallPrompt = e;
-      const installBtn = document.getElementById('btnInstallPWA');
-      if (installBtn && !AppController._isStandaloneMode()) {
-        installBtn.style.display = 'inline-flex';
+      try { e.preventDefault(); } catch (_) { }
+      AppController._installPromptEvent = e;
+      AppController._refreshInstallButton(true);
+      console.log('[PWA] beforeinstallprompt disparou — prompt nativo disponível.');
+    });
+
+    // 2) Confirmando instalação pós-user-choice: fecha botão + toast + helper Motorola
+    window.addEventListener('appinstalled', () => {
+      AppController._installPromptEvent = null;
+      try { localStorage.setItem('reformaplus_pwa_installed_v2', '1'); } catch (_) { }
+      AppController._refreshInstallButton(false);
+      AppController.showToast('✅ ReformaPlus instalado! Ícone aparece na tela inicial.', 'success', 6000);
+
+      if (AppController._isMotorola()) {
+        setTimeout(() => {
+          AppController.showToast('⚠️ Motorola/Moto Launcher pode não exibir o ícone automaticamente. Toque em 3 pontinhos ⋮ → 📲 "Adicionar à tela inicial" → Adicionar automaticamente.', 'warning', 12000);
+        }, 2500);
       }
     });
 
-    // Fallback: se beforeinstallprompt NÃO disparar mas PWA é compatível (Chrome/Edge),
-    // mostra botão com instrução para instalar manualmente (3 pontinhos → Instalar app).
+    // 3) Fallback após load: se Chrome não disparou beforeinstallprompt
+    //    (muito comum após re-instalações repetidas num mesmo aparelho),
+    //    mostra botão com explicação do método manual.
     window.addEventListener('load', () => {
-      const installBtn = document.getElementById('btnInstallPWA');
-      if (!installBtn) return;
-
-      // Se já estiver rodando como app instalado → não mostra botão nunca
-      if (AppController._isStandaloneMode()) {
-        installBtn.style.display = 'none';
-        return;
-      }
-
-      // Se prompt já chegou e botão já está visível → ignora
-      if (installBtn.style.display === 'inline-flex' || this.deferredInstallPrompt) return;
-
-      const isChromiumDesktop = /Chrome|Edg|Edge|Brave|OPR|Vivaldi/i.test(navigator.userAgent)
-        && !/Mobile|Android|iPhone|iPad/i.test(navigator.userAgent);
-
-      const isChromiumMobile = /Chrome|Edg|SamsungBrowser|OPR/i.test(navigator.userAgent)
-        && /Android/i.test(navigator.userAgent);
-
-      // Mostra botão, mas instrução sobre como instalar manual se deferred não chegar
-      setTimeout(() => {
-        if (!this.deferredInstallPrompt && (isChromiumDesktop || isChromiumMobile)) {
-          installBtn.style.display = 'inline-flex';
-          installBtn.addEventListener('click', () => {
-            if (this.deferredInstallPrompt) return;
-            this.showToast(
-              isChromiumMobile
-                ? 'Clique em ⋮ (3 pontinhos) no navegador → \"Instalar app\" para adicionar à tela inicial.'
-                : 'Para instalar: clique em ⋯ (3 pontinhos) no canto superior direito → \"Instalar aplicativo ReformaPlus ROI\".',
-              'info',
-              6000
-            );
-          }, { once: true });
-        }
-      }, 2500);
+      setTimeout(() => { AppController._refreshInstallButton(false); }, 1500);
     });
+  }
+
+  /**
+   * Sincroniza o estado do botão laranja "Instalar App" no header.
+   * - Não mostra NUNCA se já estiver rodando em modo standalone
+   * - Mostra SEMPRE se houver beforeinstallprompt disponível
+   * - Se não houver prompt (Chrome já cacheou "instalado antes"), mostra botão FALLBACK:
+   *   o toque abre o modal de instalação manual.
+   */
+  static _refreshInstallButton(fromPromptEvent) {
+    const btn = document.getElementById('btnInstallPWA');
+    if (!btn) return;
+
+    if (AppController._isStandaloneMode()) {
+      btn.style.display = 'none';
+      return;
+    }
+
+    // Caso favorito: prompt nativo disponível.
+    if (AppController._installPromptEvent) {
+      btn.style.display = 'inline-flex';
+      if (!btn.dataset.handlerInstalled) {
+        btn.dataset.handlerInstalled = '1';
+        btn.addEventListener('click', () => { AppController._handleInstallClick(); });
+      }
+      return;
+    }
+
+    // Fallback: se não temos prompt, mas navegador é PWA-compatível Android Chrome → mostra botão mesmo assim
+    const ua = (navigator && navigator.userAgent) ? navigator.userAgent : '';
+    const isChromeAndroid = /Chrome/i.test(ua) && /Android/i.test(ua) && !/Edg|SamsungBrowser/i.test(ua);
+
+    // Só mostra fallback imediatamente se vier de load (não de beforeinstallprompt).
+    if (!fromPromptEvent && isChromeAndroid) {
+      btn.style.display = 'inline-flex';
+      if (!btn.dataset.handlerInstalled) {
+        btn.dataset.handlerInstalled = '1';
+        btn.addEventListener('click', () => { AppController._handleInstallClick(); });
+      }
+      return;
+    }
+
+    // Desktop: mostra botão também, fallback com 3 pontinhos.
+    if (!fromPromptEvent) {
+      btn.style.display = 'inline-flex';
+      if (!btn.dataset.handlerInstalled) {
+        btn.dataset.handlerInstalled = '1';
+        btn.addEventListener('click', () => { AppController._handleInstallClick(); });
+      }
+    }
+  }
+
+  /**
+   * Clique no botão Instalar App:
+   * 1) Se houver evento beforeinstallprompt salvo → abre prompt nativo Chrome
+   * 2) Se não houver → toast + modal de instalação manual.
+   */
+  static _handleInstallClick() {
+    const prompt = AppController._installPromptEvent;
+    if (prompt) {
+      try {
+        prompt.prompt();
+        prompt.userChoice.then((choice) => {
+          if (choice.outcome === 'accepted') {
+            AppController.showToast('📲 Instalando ReformaPlus...', 'info', 4000);
+          }
+          AppController._installPromptEvent = null;
+        }).catch(() => { });
+        return;
+      } catch (_) { AppController._installPromptEvent = null; }
+    }
+
+    // Fallback: método manual (Chrome já marcou app como "já instalado" ou Motorola não mostra botão nativo)
+    const isMobile = /Android|iPhone|iPad/i.test((navigator.userAgent || ''));
+    const msgMotorola = AppController._isMotorola()
+      ? '<br><br><span style="color:#f59e0b;font-weight:700">⚠️ Motorola Launcher detectado (Moto G22 / Android 12):<br>o ícone NÃO aparece automaticamente.<br>USE O MÉTODO 1 ABAIXO.</span>'
+      : '';
+
+    const stepsMobile = `
+      <h3 style="margin-top:0;color:#10b981">📲 Instalar no Celular</h3>
+      <h4 style="margin:1rem 0 .5rem 0">✅ Método 1 — SEMPRE FUNCIONA (Recomendado Motorola)</h4>
+      <ol style="padding-left:1.3rem;line-height:1.8">
+        <li>Toque em <b>3 pontinhos ⋮</b> no canto superior direito do Chrome.</li>
+        <li>Role e toque em <b>📲 Adicionar à tela inicial</b> ou <b>Instalar app</b>.</li>
+        <li>Toque em <b>Adicionar</b> (azul) → <b>Adicionar automaticamente</b>.</li>
+        <li>Volte para a <b>Tela Inicial</b>. O ícone ReformaPlus aparece agora.</li>
+      </ol>
+      <h4 style="margin:1rem 0 .5rem 0">🔎 Método 2 — Se já instalou e não apareceu</h4>
+      <ol style="padding-left:1.3rem;line-height:1.8">
+        <li>Arraste a barra de status → Pesquisa 🔍 do sistema Android.</li>
+        <li>Digite: <b>ReformaPlus</b>.</li>
+        <li>Segure 2 segundos no resultado → <b>Adicionar à tela inicial</b> / arraste pro topo.</li>
+      </ol>
+      ${msgMotorola}
+    `;
+
+    const stepsDesktop = `
+      <h3 style="margin-top:0;color:#10b981">💻 Instalar no Computador</h3>
+      <ol style="padding-left:1.3rem;line-height:1.8">
+        <li>Clique em <b>⋯ 3 pontinhos</b> (canto superior direito do Chrome/Edge).</li>
+        <li>Clique em <b>Instalar aplicativo ReformaPlus ROI</b> → <b>Instalar</b>.</li>
+        <li>Atalho aparece no Menu Iniciar / Dock automaticamente.</li>
+      </ol>
+    `;
+
+    const html = `<div style="padding:8px 6px;max-width:520px;">${isMobile ? stepsMobile : stepsDesktop}<br><p style="text-align:right;margin:1rem 0 0 0"><button onclick="AppController._closeInstallModal();" style="padding:.65rem 1.2rem;border-radius:9999px;border:0;background:#10b981;color:#fff;font-weight:700;cursor:pointer">Entendido ✅</button></p></div>`;
+    AppController._openModal('📲 Instalar ReformaPlus', html, true);
+  }
+
+  // Fecha o modal de instalação manual
+  static _closeInstallModal() {
+    try { document.getElementById('rp-install-modal-overlay')?.remove(); } catch (_) { }
+    const backdrop = document.getElementById('modalBackdrop');
+    const modal = document.getElementById('authModal');
+    if (backdrop) backdrop.style.display = 'none';
+    if (modal) { try { const closeBtn = modal.querySelector('.modal-close, [data-close-modal]'); if (closeBtn) closeBtn.click(); } catch (_) { } }
+  }
+
+  // Detecta aparelhos Motorola / Moto Launcher (têm limitação de não mostrar ícone automaticamente)
+  static _isMotorola() {
+    const ua = (navigator && navigator.userAgent) ? navigator.userAgent : '';
+    const vendor = (navigator && navigator.vendor) ? navigator.vendor : '';
+    return /motorola|moto g|moto g\d|myux| XT| moto |lenovo moto/i.test(ua + ' ' + vendor);
   }
 
   // Retorna true se o app está rodando como PWA instalado (sem barra do navegador)
   static _isStandaloneMode() {
-    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
-      || (window.navigator && 'standalone' in window.navigator && window.navigator.standalone === true)
-      || document.referrer.includes('android-app://');
+    try {
+      if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
+      if (window.matchMedia && window.matchMedia('(display-mode: fullscreen)').matches) return true;
+      if (window.matchMedia && window.matchMedia('(display-mode: minimal-ui)').matches) return true;
+      if (window.navigator && 'standalone' in window.navigator && window.navigator.standalone === true) return true;
+      if (document.referrer && document.referrer.includes('android-app://')) return true;
+      const proto = (window.location && window.location.protocol) ? window.location.protocol : '';
+      if (proto.startsWith('file') || proto.startsWith('chrome-extension')) return false;
+    } catch (_) { }
+    return false;
   }
 
   static bindEvents() {
@@ -347,18 +464,7 @@ class AppController {
 
     const btnInstallPWA = document.getElementById('btnInstallPWA');
     if (btnInstallPWA) {
-      btnInstallPWA.addEventListener('click', () => {
-        if (this.deferredInstallPrompt) {
-          this.deferredInstallPrompt.prompt();
-          this.deferredInstallPrompt.userChoice.then((choiceResult) => {
-            if (choiceResult.outcome === 'accepted') {
-              this.showToast('Aplicativo instalado no seu dispositivo!');
-            }
-            this.deferredInstallPrompt = null;
-            installBtn.style.display = 'none';
-          });
-        }
-      });
+      btnInstallPWA.addEventListener('click', () => AppController._handleInstallClick());
     }
 
     // Theme Toggle
