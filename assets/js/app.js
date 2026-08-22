@@ -61,7 +61,7 @@ class AppController {
   /**
    * Router Deep Link: disparado por atalhos PWA (shortcuts),
    * Web Share Target, File Handler, Protocol Handler (web+reformaplus://)
-   * e URLs diretas tipo reform-plus-roi.vercel.app/#/imovels.
+   * e URLs diretas tipo reforma-plus-roi.vercel.app/#/imovels.
    *
    * Parâmetros reconhecidos (?query ou #hash ou /pathname):
    *  - ?deeplink=<aba>   (ex: ?deeplink=imovels)
