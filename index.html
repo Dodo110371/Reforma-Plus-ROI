@@ -20,49 +20,22 @@
     })();
   </script>
 
-  <!-- PWA INSTALL GLOBAL STATE (captura eventos antes do DOMContentLoaded — CHROME 151 RACE FIX)
-       O beforeinstallprompt pode disparar ANTES de window.load / DOMContentLoaded,
-       então registramos os listeners CEDO, aqui no topo do HEAD.
-       AppController._refreshInstallButton() lê este estado mais tarde. -->
+  <!-- PWA INSTALL - ÚNICA VARIÁVEL GLOBAL + LISTENER MAIS CEDO POSSÍVEL (HEAD). -->
   <script>
+    let deferredInstallPrompt = null;
     (function () {
       try {
-        window.__INSTALL_STATE__ = {
-          prompt: null,             // evento beforeinstallprompt (se já disparou)
-          firedAt: null,            // timestamp UTC (0 se não)
-          installedAt: null,        // quando appinstalled disparou (0 caso não)
-          wasInstalledEarlier: !!localStorage.getItem('reformaplus_pwa_installed_v2')
-        };
-
-        // Reset cache ChromeInstaller (limpa flag "já instalado antes" do Chrome)
-        try { localStorage.removeItem('reformaplus_pwa_installed_v2'); } catch (_) { }
-
         window.addEventListener('beforeinstallprompt', function (e) {
           try { e.preventDefault(); } catch (_) { }
-          window.__INSTALL_STATE__.prompt = e;
-          window.__INSTALL_STATE__.firedAt = Date.now();
-          // console.log('[PWA GLOBAL] beforeinstallprompt disparou (head).');
-          // Notifica AppController caso ele já exista,
-          // caso contrário AppController lê window.__INSTALL_STATE__ no init() depois.
+          deferredInstallPrompt = e;
           if (window.AppController && typeof window.AppController._refreshInstallButton === 'function') {
-            try { window.AppController._refreshInstallButton(true); } catch (_) { }
+            try { window.AppController._refreshInstallButton(); } catch (_) { }
           }
         });
-
         window.addEventListener('appinstalled', function () {
-          window.__INSTALL_STATE__.prompt = null;
-          window.__INSTALL_STATE__.installedAt = Date.now();
-          try { localStorage.setItem('reformaplus_pwa_installed_v2', '1'); } catch (_) { }
+          deferredInstallPrompt = null;
           if (window.AppController && typeof window.AppController._refreshInstallButton === 'function') {
-            try { window.AppController._refreshInstallButton(false); } catch (_) { }
-            try { window.AppController.showToast && window.AppController.showToast('✅ ReformaPlus instalado! Ícone aparece tela inicial.', 'success', 6000); } catch (_) { }
-            setTimeout(function () {
-              try {
-                if (window.AppController && /motorola|moto g| XT| moto |myux|Android.*(Moto|Motorola)/i.test((navigator.userAgent || '') + ' ' + (navigator.vendor || ''))) {
-                  window.AppController.showToast('⚠️ Motorola: ícone não aparece automático. Toque em 3 pontinhos ⋮ → 📲 Adicionar à tela inicial → Adicionar automaticamente.', 'warning', 12000);
-                }
-              } catch (_) { }
-            }, 2500);
+            try { window.AppController._refreshInstallButton(); } catch (_) { }
           }
         });
       } catch (e) { /* ignore */ }
@@ -70,7 +43,7 @@
   </script>
 
   <!-- PWA Config & Meta -->
-  <link rel="manifest" href="./manifest.json">
+  <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#10b981" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
   <meta name="mobile-web-app-capable" content="yes">
@@ -84,54 +57,54 @@
   <meta name="msapplication-tap-highlight" content="no">
 
   <!-- Ícones Apple Touch (14 tamanhos para cada resolução iPhone/iPad/Retina) -->
-  <link rel="apple-touch-icon" sizes="57x57" href="./assets/icons/icon-192.png">
-  <link rel="apple-touch-icon" sizes="60x60" href="./assets/icons/icon-192.png">
-  <link rel="apple-touch-icon" sizes="72x72" href="./assets/icons/icon-192.png">
-  <link rel="apple-touch-icon" sizes="76x76" href="./assets/icons/icon-192.png">
-  <link rel="apple-touch-icon" sizes="114x114" href="./assets/icons/icon-192.png">
-  <link rel="apple-touch-icon" sizes="120x120" href="./assets/icons/icon-512.png">
-  <link rel="apple-touch-icon" sizes="144x144" href="./assets/icons/icon-512.png">
-  <link rel="apple-touch-icon" sizes="152x152" href="./assets/icons/icon-512.png">
-  <link rel="apple-touch-icon" sizes="167x167" href="./assets/icons/icon-512.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="./assets/icons/icon-512.png">
-  <link rel="apple-touch-icon" sizes="1024x1024" href="./assets/icons/icon-512.png">
+  <link rel="apple-touch-icon" sizes="57x57" href="/assets/icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="60x60" href="/assets/icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="72x72" href="/assets/icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="76x76" href="/assets/icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="114x114" href="/assets/icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="120x120" href="/assets/icons/icon-512.png">
+  <link rel="apple-touch-icon" sizes="144x144" href="/assets/icons/icon-512.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="/assets/icons/icon-512.png">
+  <link rel="apple-touch-icon" sizes="167x167" href="/assets/icons/icon-512.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/icon-512.png">
+  <link rel="apple-touch-icon" sizes="1024x1024" href="/assets/icons/icon-512.png">
 
   <!-- Splash Screens iOS (todas as resoluções de iPhone SE até iPhone 15 Pro Max + iPad) -->
   <!-- iPhone SE 2nd/3rd gen: 667x1334 @2x = 750x1334 -->
-  <link rel="apple-touch-startup-image" href="./assets/icons/icon-512.png"
+  <link rel="apple-touch-startup-image" href="/assets/icons/icon-512.png"
     media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
   <!-- iPhone X/XS/11 Pro / 12 mini / 13 mini: 812x1792 -->
-  <link rel="apple-touch-startup-image" href="./assets/icons/icon-512.png"
+  <link rel="apple-touch-startup-image" href="/assets/icons/icon-512.png"
     media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
   <!-- iPhone 12/13/14: 1170x2532 -->
-  <link rel="apple-touch-startup-image" href="./assets/icons/icon-512.png"
+  <link rel="apple-touch-startup-image" href="/assets/icons/icon-512.png"
     media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
   <!-- iPhone 14 Pro: 1179x2556 -->
-  <link rel="apple-touch-startup-image" href="./assets/icons/icon-512.png"
+  <link rel="apple-touch-startup-image" href="/assets/icons/icon-512.png"
     media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
   <!-- iPhone XR / 11 / 12/13/14 Plus: 1284x2778 -->
-  <link rel="apple-touch-startup-image" href="./assets/icons/icon-512.png"
+  <link rel="apple-touch-startup-image" href="/assets/icons/icon-512.png"
     media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
-  <link rel="apple-touch-startup-image" href="./assets/icons/icon-512.png"
+  <link rel="apple-touch-startup-image" href="/assets/icons/icon-512.png"
     media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
   <!-- iPhone 14 Pro Max / 15 Plus / 15 Pro Max: 1290x2796 -->
-  <link rel="apple-touch-startup-image" href="./assets/icons/icon-512.png"
+  <link rel="apple-touch-startup-image" href="/assets/icons/icon-512.png"
     media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
   <!-- iPad 10.2 / 10.5 (834x1112/834x1194) @2x -->
-  <link rel="apple-touch-startup-image" href="./assets/icons/icon-512.png"
+  <link rel="apple-touch-startup-image" href="/assets/icons/icon-512.png"
     media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
-  <link rel="apple-touch-startup-image" href="./assets/icons/icon-512.png"
+  <link rel="apple-touch-startup-image" href="/assets/icons/icon-512.png"
     media="(device-width: 834px) and (device-height: 1112px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
-  <link rel="apple-touch-startup-image" href="./assets/icons/icon-512.png"
+  <link rel="apple-touch-startup-image" href="/assets/icons/icon-512.png"
     media="(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
-  <link rel="apple-touch-startup-image" href="./assets/icons/icon-512.png"
+  <link rel="apple-touch-startup-image" href="/assets/icons/icon-512.png"
     media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
 
   <!-- Favicon padrão + máscara SVG -->
-  <link rel="icon" type="image/png" sizes="192x192" href="./assets/icons/icon-192.png">
-  <link rel="icon" type="image/png" sizes="512x512" href="./assets/icons/icon-512.png">
-  <link rel="mask-icon" href="./assets/icons/icon-512.png" color="#10b981">
-  <link rel="shortcut icon" type="image/x-icon" href="./assets/icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/assets/icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="/assets/icons/icon-512.png">
+  <link rel="mask-icon" href="/assets/icons/icon-512.png" color="#10b981">
+  <link rel="shortcut icon" type="image/x-icon" href="/assets/icons/icon-192.png">
 
   <!-- Meta SEO -->
   <meta name="description"
@@ -1892,52 +1865,6 @@
   <script src="./assets/js/supabaseClient.js"></script>
   <script src="./assets/js/supabaseSync.js"></script>
   <script src="./assets/js/app.js"></script>
-  <!-- PWA Fix Botão Instalar: registra handler click IMEDIATO SEM ESPERAR init/bindEvents (Chrome 151 race) -->
-  <script>
-    (function () {
-      try {
-        const btn = document.getElementById('btnInstallPWA');
-        if (btn) {
-          if (!btn.dataset.immediateInstallBound) {
-            btn.dataset.immediateInstallBound = '1';
-            // Handler cedo: evita que init() ainda não rodou e botão laranja não reaja ao clique.
-            btn.addEventListener('click', function (ev) {
-              ev.preventDefault();
-              ev.stopPropagation();
-              // 1) PRIORIDADE 1: AppController fluxo completo v2.0.9 com _forceDirectInstallAttempt
-              if (window.AppController && typeof window.AppController._handleInstallClick === 'function') {
-                try { window.AppController._handleInstallClick(); return; } catch (_) { }
-              }
-              // 2) Fallback ultra seguro: prompt direto global state se existir
-              try {
-                const globalP = (window.__INSTALL_STATE__ && window.__INSTALL_STATE__.prompt);
-                if (globalP) {
-                  globalP.prompt();
-                  window.__INSTALL_STATE__.prompt = null;
-                  return;
-                }
-              } catch (_) { }
-              // 3) Último caso: TOAST orientativo (SEM MODAL PASSO-A-PASSO — exigência do usuário)
-              const ua = (navigator.userAgent || '') + ' ' + (navigator.vendor || '');
-              const isMobile = /Android|iPhone|iPad|iPod/i.test(ua);
-              const isMotorola = /motorola|moto g|moto g\d|myux| XT| moto |lenovo moto/i.test(ua);
-              const msg = isMobile
-                ? ('📲 Toque nos 3 pontinhos ⋮ → "Instalar app" → Adicionar automaticamente.' +
-                  (isMotorola ? ' ⚠️ Motorola: use Adicionar automaticamente.' : ''))
-                : '💻 Clique em ⋯ 3 pontinhos → "Instalar aplicativo ReformaPlus ROI" → Instalar.';
-              try {
-                if (window.AppController && window.AppController.showToast) {
-                  window.AppController.showToast(msg, 'warning', 22000);
-                } else {
-                  alert(msg);
-                }
-              } catch (_) { alert(msg); }
-            });
-          }
-        }
-      } catch (e) { /* ignore */ }
-    })();
-  </script>
 </body>
 
 </html>

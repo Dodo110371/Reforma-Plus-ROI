@@ -11,7 +11,6 @@ document.addEventListener('DOMContentLoaded', () => {
 class AppController {
   static currentExpenseIdToEdit = null;
   static currentReceiptPreviewUrl = null;
-  static deferredInstallPrompt = null;
 
   static init() {
     try {
@@ -158,77 +157,33 @@ class AppController {
   }
 
   static registerServiceWorker() {
-    if ('serviceWorker' in navigator) {
-      // PASSO 1: Remove service workers ANTIGOS primeiro (evita cache que bloqueia beforeinstallprompt)
-      try {
-        navigator.serviceWorker.getRegistrations().then((registrations) => {
-          for (const reg of registrations) {
-            try { reg.unregister().catch(() => { }); } catch (_) { }
-          }
-          // Depois de desregistrar, registra SW novo com cache bust forte
-          setTimeout(() => {
-            navigator.serviceWorker.register('./sw.js?v=210FORCE')
-              .then((reg) => {
-                console.log('Service Worker v2.0.8 registrado:', reg.scope);
-                try {
-                  if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-                  if (reg.installing) reg.installing.postMessage({ type: 'SKIP_WAITING' });
-                  if (reg.active) reg.active.postMessage({ type: 'SKIP_WAITING' });
-                } catch (_) { }
-                // SW controla a página: refresca botão install (antes poderia vir tarde demais)
-                setTimeout(() => { try { AppController._refreshInstallButton(false); } catch (_) { } }, 300);
-              })
-              .catch((err) => console.warn('Erro registrar SW v2.0.8:', err));
-          }, 120);
-        }).catch(() => {
-          // Se getRegistrations falhar (navegador antigo), tenta registrar direto
-          navigator.serviceWorker.register('./sw.js?v=210FORCE')
-            .catch((err) => console.warn('Erro fallback registrar SW:', err));
-        });
-      } catch (_) {
-        try { navigator.serviceWorker.register('./sw.js?v=210FORCE').catch(() => { }); } catch (_) { }
-      }
+    if (!('serviceWorker' in navigator)) {
+      try { AppController._refreshInstallButton(); } catch (_) { }
+      return;
     }
-
-    // Reset ChromeInstaller: LIMPA TODAS flags possíveis localStorage/sessionStorage relacionadas PWA/install
     try {
-      const keys2Remove = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && /reformaplus.*pwa|pwa.*install|beforeinstall|reformaplus_pwa|installed.*v2|deferred.*prompt/i.test(k)) {
-          keys2Remove.push(k);
-        }
-      }
-      keys2Remove.forEach(k => { try { localStorage.removeItem(k); } catch (_) { } });
-      try { sessionStorage.clear(); } catch (_) { }
-    } catch (_) { }
-
-    if (window.__INSTALL_STATE__) {
-      window.__INSTALL_STATE__.installedAt = null;
-      window.__INSTALL_STATE__.wasInstalledEarlier = false;
+      navigator.serviceWorker.register('./sw.js')
+        .then((reg) => {
+          console.log('[PWA] Service Worker registrado, escopo:', reg.scope);
+          try {
+            if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+            if (reg.installing) {
+              reg.installing.addEventListener('statechange', () => {
+                try { if (reg.active) reg.active.postMessage({ type: 'SKIP_WAITING' }); } catch (_) { }
+              });
+            }
+            if (reg.active) reg.active.postMessage({ type: 'SKIP_WAITING' });
+          } catch (_) { }
+          try { AppController._refreshInstallButton(); } catch (_) { }
+        })
+        .catch((err) => console.warn('[PWA] Erro registrar Service Worker:', err));
+    } catch (err) {
+      console.warn('[PWA] register() exceção:', err);
     }
-
-    // Sincroniza estado inicial global -> AppController
-    if (window.__INSTALL_STATE__ && window.__INSTALL_STATE__.prompt) {
-      AppController._installPromptEvent = window.__INSTALL_STATE__.prompt;
-    }
-
-    try { AppController._refreshInstallButton(false); } catch (_) { }
-    setTimeout(() => { try { AppController._refreshInstallButton(false); } catch (_) { } }, 600);
-    window.addEventListener('load', () => {
-      setTimeout(() => { try { AppController._refreshInstallButton(false); } catch (_) { } }, 1200);
-      setTimeout(() => { try { AppController._refreshInstallButton(false); } catch (_) { } }, 2500);
-    });
+    try { AppController._refreshInstallButton(); } catch (_) { }
   }
 
-  /**
-   * Sincroniza o estado do botão laranja "Instalar App" no header.
-   * - Não mostra NUNCA se já estiver rodando em modo standalone
-   * - Mostra SEMPRE se houver beforeinstallprompt disponível
-   * - Se não houver prompt (Chrome já cacheou "instalado antes"), mostra botão FALLBACK:
-   *   o toque abre o modal de instalação manual (autocontido, não depende de modais do app).
-   */
-  static _refreshInstallButton(fromPromptEvent) {
+  static _refreshInstallButton() {
     const btn = document.getElementById('btnInstallPWA');
     if (!btn) return;
 
@@ -237,14 +192,8 @@ class AppController {
       return;
     }
 
-    // Prioriza o estado global capturado no <head>
-    if (window.__INSTALL_STATE__ && window.__INSTALL_STATE__.prompt && !AppController._installPromptEvent) {
-      AppController._installPromptEvent = window.__INSTALL_STATE__.prompt;
-    }
-
-    // Handler ONCLICK sempre seta (evita race do clickhandler ser "tarde demais")
-    if (!btn.dataset.handlerInstalled) {
-      btn.dataset.handlerInstalled = '1';
+    if (!btn.dataset.pwaInstallHandler) {
+      btn.dataset.pwaInstallHandler = '1';
       btn.addEventListener('click', (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
@@ -252,165 +201,46 @@ class AppController {
       });
     }
 
-    // Caso favorito: prompt nativo disponível.
-    if (AppController._installPromptEvent) {
+    if (deferredInstallPrompt && typeof deferredInstallPrompt.prompt === 'function') {
       btn.style.display = 'inline-flex';
-      btn.title = 'Instalar ReformaPlus na Tela Inicial (1 clique)';
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.style.cursor = 'pointer';
+      btn.innerHTML = '📲 Instalar App';
+      btn.title = 'Instalar ReformaPlus como aplicativo.';
       return;
     }
 
-    // Fallback: sempre mostra o botão laranja em Chrome/Edge desktop ou Android Chrome.
-    // Se beforeinstallprompt não vier, clique abre a instrução manual (SEM depender de prompt nativo).
-    const ua = (navigator && navigator.userAgent) ? navigator.userAgent : '';
-    const vendor = (navigator && navigator.vendor) ? navigator.vendor : '';
-    const uaFull = ua + ' ' + vendor;
-    const isAnyChromeLike = /Chrome|Chromium|Edg|Brave|OPR|Vivaldi|CriOS|FxiOS/i.test(uaFull) || document.documentElement;
-    const isChromeAndroid = /Chrome|Chromium|CriOS/i.test(ua) && /Android/i.test(ua) && !/Edg|SamsungBrowser|OPR/i.test(ua);
-    const isDesktop = !/Mobi|Android|iPhone|iPad|iPod/i.test(ua);
-
-    // Mostra o botão para QUALQUER navegador compatível com PWA (desktop ou mobile)
-    // independente de beforeinstallprompt ter disparado.
-    if (isChromeAndroid || isDesktop || isAnyChromeLike) {
-      btn.style.display = 'inline-flex';
-      btn.title = 'Instalar ReformaPlus na Tela Inicial';
-      return;
-    }
-
-    // Outros navegadores (Safari mobile etc): mostra o botão de qualquer forma, instrução manual
     btn.style.display = 'inline-flex';
-    btn.title = 'Instalar ReformaPlus';
+    btn.disabled = true;
+    btn.style.opacity = '0.7';
+    btn.style.cursor = 'not-allowed';
+    btn.innerHTML = '⚠️ Instalação indisponível';
+    btn.title = 'Instalação PWA não disponível no navegador atual ou ainda não liberada.';
   }
 
-  /**
-   * Helper: Tenta TUDO para disparar PROMPT NATIVO DIRETO (instalação 1 clique).
-   * - MODAL DE PASSO-A-PASSO REMOVIDO POR EXIGÊNCIA DO USUÁRIO.
-   * - Se após 5 segundos ainda não tiver prompt, mostra apenas TOAST ORIENTATIVO
-   *   dizendo para o usuário usar o menu 3 pontinhos do navegador.
-   */
-  static async _forceDirectInstallAttempt() {
-    const tryShowPromptNow = () => {
-      const p = AppController._installPromptEvent || (window.__INSTALL_STATE__ && window.__INSTALL_STATE__.prompt);
-      if (p) {
-        try {
-          p.prompt();
-          AppController._installPromptEvent = null;
-          if (window.__INSTALL_STATE__) window.__INSTALL_STATE__.prompt = null;
-          try {
-            p.userChoice.then((choice) => {
-              if (choice.outcome === 'accepted') AppController.showToast && AppController.showToast('📲 Instalando ReformaPlus...', 'info', 4000);
-            }).catch(() => { });
-          } catch (_) { }
-          return true;
-        } catch (_) {
-          AppController._installPromptEvent = null;
-          if (window.__INSTALL_STATE__) window.__INSTALL_STATE__.prompt = null;
-        }
-      }
-      return false;
-    };
+  static async _handleInstallClick() {
+    if (!deferredInstallPrompt || typeof deferredInstallPrompt.prompt !== 'function') {
+      try { AppController._refreshInstallButton(); } catch (_) { }
+      return;
+    }
 
-    // Verificação 0: tem prompt já? Mostra direto, 0 overhead.
-    if (tryShowPromptNow()) return;
+    const p = deferredInstallPrompt;
+    deferredInstallPrompt = null;
 
-    // Mostra toast de progresso
-    AppController.showToast && AppController.showToast('⌛ Preparando instalação direta... aguarde 5 segundos', 'info', 5500);
-
-    // 1) Limpa TODOS caches de origem (caches.delete API)
     try {
-      if ('caches' in window) {
-        const cacheKeys = await caches.keys();
-        for (const k of cacheKeys) { try { await caches.delete(k); } catch (_) { } }
+      await p.prompt();
+      const choice = await p.userChoice;
+      try { AppController._refreshInstallButton(); } catch (_) { }
+      if (choice && choice.outcome === 'accepted') {
+        try { AppController.showToast('📲 Instalando ReformaPlus...', 'info', 4000); } catch (_) { }
+      } else {
+        try { AppController.showToast('Instalação cancelada.', 'info', 3000); } catch (_) { }
       }
-    } catch (_) { }
-
-    // 2) Limpa localStorage/sessionStorage install flags
-    try {
-      const keysDel = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && /reformaplus.*pwa|pwa.*install|beforeinstall|installed_v|deferred.*prompt|chromeinstall/i.test(k)) keysDel.push(k);
-      }
-      keysDel.forEach(k => { try { localStorage.removeItem(k); } catch (_) { } });
-      try { sessionStorage.clear(); } catch (_) { }
-    } catch (_) { }
-
-    // 3) Reregistra Service Worker forçado (sem cache)
-    if ('serviceWorker' in navigator) {
-      try {
-        const regs = await navigator.serviceWorker.getRegistrations();
-        for (const reg of regs) { try { await reg.unregister(); } catch (_) { } }
-        try {
-          await navigator.serviceWorker.register('./sw.js?v=210FORCE3&t=' + Date.now());
-        } catch (_) { }
-      } catch (_) { }
+    } catch (err) {
+      console.warn('[PWA] prompt() falhou:', err);
+      try { AppController._refreshInstallButton(); } catch (_) { }
     }
-
-    // 4) Espera 3s (tempo Chrome heurística disparar beforeinstallprompt após user gesture / clique)
-    await new Promise(r => setTimeout(r, 3000));
-
-    // 5) Verificação 1 após espera: tem prompt agora?
-    if (tryShowPromptNow()) return;
-
-    // 6) Espera +2s extra para casos lentos
-    await new Promise(r => setTimeout(r, 2000));
-
-    // 7) Verificação FINAL
-    if (tryShowPromptNow()) return;
-
-    // 8) DEU ERRADO tudo — NÃO ABRE MODAL NENHUM (exigência do usuário).
-    //    Apenas toast orientativo 22 segundos.
-    const ua = (navigator.userAgent || '') + ' ' + (navigator.vendor || '');
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(ua);
-    const isMotorola = /motorola|moto g|moto g\d|myux| XT| moto |lenovo moto/i.test(ua);
-
-    if (isMobile) {
-      const extra = isMotorola
-        ? ' ⚠️ Motorola: após instalar use "Adicionar automaticamente".'
-        : '';
-      AppController.showToast && AppController.showToast(
-        '📲 Toque nos 3 pontinhos ⋮ no canto superior direito → "Instalar app" → Adicionar automaticamente.' + extra,
-        'warning',
-        22000
-      );
-    } else {
-      AppController.showToast && AppController.showToast(
-        '💻 Clique em ⋯ 3 pontinhos (canto superior direito) → "Instalar aplicativo ReformaPlus ROI" → Instalar.',
-        'warning',
-        22000
-      );
-    }
-  }
-
-  /**
-   * Clique no botão Instalar App:
-   * 🔴 PRIORIDADE 1 ABSOLUTA (exigência usuário): INSTALAÇÃO DIRETA 1 CLIQUE,
-   * NUNCA MAIS abre modal de passo-a-passo.
-   * O fallback máximo permitido é um TOAST orientativo (22s) sobre o menu 3 pontinhos.
-   */
-  static _handleInstallClick() {
-    // Tentativa IMEDIATA de prompt nativo (caso beforeinstallprompt já tenha disparado)
-    const prompt0 = AppController._installPromptEvent || (window.__INSTALL_STATE__ && window.__INSTALL_STATE__.prompt);
-    if (prompt0) {
-      try {
-        prompt0.prompt();
-        AppController._installPromptEvent = null;
-        if (window.__INSTALL_STATE__) window.__INSTALL_STATE__.prompt = null;
-        try {
-          prompt0.userChoice.then((choice) => {
-            if (choice.outcome === 'accepted') AppController.showToast && AppController.showToast('📲 Instalando ReformaPlus...', 'info', 4000);
-          }).catch(() => { });
-        } catch (_) { }
-        return;
-      } catch (_) {
-        AppController._installPromptEvent = null;
-        if (window.__INSTALL_STATE__) window.__INSTALL_STATE__.prompt = null;
-      }
-    }
-
-    // ============================================================
-    // INSTALAÇÃO DIRETA FORÇADA. Sempre tenta. NÃO HÁ fallback modal.
-    // ============================================================
-    AppController._forceDirectInstallAttempt();
   }
 
   // Detecta aparelhos Motorola / Moto Launcher (têm limitação de não mostrar ícone automaticamente)
@@ -556,11 +386,6 @@ class AppController {
           }
         });
       });
-    }
-
-    const btnInstallPWA = document.getElementById('btnInstallPWA');
-    if (btnInstallPWA) {
-      btnInstallPWA.addEventListener('click', () => AppController._handleInstallClick());
     }
 
     // Theme Toggle

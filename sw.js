@@ -1,7 +1,7 @@
 // Service Worker para suporte Offline e PWA do ReformaPlus ROI
 // v2.0.10 — manifest v2.0.10 MINIMO (paths ícones ABSOLUTOS + launch_handler /
 //        manifest_version / short_name_aliases / description_override removidos)
-const CACHE_NAME = 'reformaplus-v2.0.10';
+const CACHE_NAME = 'reformaplus-v2.0.12';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -13,16 +13,8 @@ const ASSETS_TO_CACHE = [
   '/assets/js/auth.js',
   '/assets/js/reports.js',
   '/assets/js/env.js',
-  '/assets/icons/icon-48.png',
-  '/assets/icons/icon-72.png',
-  '/assets/icons/icon-96.png',
-  '/assets/icons/icon-128.png',
-  '/assets/icons/icon-144.png',
-  '/assets/icons/icon-152.png',
   '/assets/icons/icon-192.png',
-  '/assets/icons/icon-384.png',
-  '/assets/icons/icon-512.png',
-  '/assets/icons/icon-maskable-512.png'
+  '/assets/icons/icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {
