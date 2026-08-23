@@ -233,7 +233,7 @@ class AppController {
       const choice = await p.userChoice;
       try { AppController._refreshInstallButton(); } catch (_) { }
       if (choice && choice.outcome === 'accepted') {
-        try { AppController.showToast('📲 Instalando ReformaPlus...', 'info', 4000); } catch (_) { }
+        try { AppController.showToast('⚙️ Instalação aceita. Preparando o ReformaPlus...', 'info', 12000); } catch (_) { }
       } else {
         try { AppController.showToast('Instalação cancelada.', 'info', 3000); } catch (_) { }
       }

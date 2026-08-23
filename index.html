@@ -37,6 +37,9 @@
           if (window.AppController && typeof window.AppController._refreshInstallButton === 'function') {
             try { window.AppController._refreshInstallButton(); } catch (_) { }
           }
+          if (window.AppController && typeof window.AppController.showToast === 'function') {
+            try { AppController.showToast('✅ ReformaPlus instalado com sucesso!', 'success', 8000); } catch (_) { }
+          }
         });
       } catch (e) { /* ignore */ }
     })();
