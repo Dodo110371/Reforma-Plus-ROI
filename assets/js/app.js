@@ -14,6 +14,10 @@ class AppController {
 
   static init() {
     try {
+      this._setupMobileProauthViewport();
+    } catch (err) { console.warn('[App] setup mobile viewport falhou:', err); }
+
+    try {
       StorageManager.initStorage();
     } catch (err) {
       console.error('[App] Erro em StorageManager.initStorage (continuando mesmo assim):', err);
@@ -650,6 +654,76 @@ class AppController {
     this.renderAllViews();
     setTimeout(() => SupabaseSync.processQueue(), 500);
     this.showToast('Imóvel e seus dados foram excluídos.');
+  }
+
+  /**
+   * Ajusta dinamicamente a viewport do modal de autenticação no mobile:
+   *  1. Usa visualViewport.height (se existir) → reflete a área REAL visível quando teclado virtual abre.
+   *  2. Rola automaticamente o input focado para não ficar encoberto pelo teclado.
+   *  3. Reage a resize, orientationchange e resize do visualViewport.
+   */
+  static _setupMobileProauthViewport() {
+    const updateVh = () => {
+      try {
+        const vv = (typeof window !== 'undefined' && window.visualViewport) ? window.visualViewport : null;
+        let h = vv ? vv.height : (window.innerHeight || document.documentElement.clientHeight);
+        if (h && h > 0) {
+          document.documentElement.style.setProperty('--proauth-visible-vh', h + 'px');
+        }
+      } catch (_) { /* ignore */ }
+    };
+
+    updateVh();
+    try { window.addEventListener('resize', updateVh, { passive: true }); } catch (_) { }
+    try { window.addEventListener('orientationchange', updateVh, { passive: true }); } catch (_) { }
+    try {
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', updateVh, { passive: true });
+        window.visualViewport.addEventListener('scroll', updateVh, { passive: true });
+      }
+    } catch (_) { }
+
+    const ensureInputVisible = (el) => {
+      if (!el) return;
+      const formsContainer = el.closest('.proauth-forms');
+      if (!formsContainer) return;
+      const scrollTarget = el.closest('.form-group, .proauth-submit, .proauth-error-inline') || el;
+      try {
+        if (typeof scrollTarget.scrollIntoViewIfNeeded === 'function') {
+          scrollTarget.scrollIntoViewIfNeeded(true);
+        } else if (typeof scrollTarget.scrollIntoView === 'function') {
+          try {
+            scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+          } catch (_) {
+            scrollTarget.scrollIntoView(false);
+          }
+        }
+      } catch (_) {
+        try {
+          const vvRect = window.visualViewport
+            ? { top: window.visualViewport.offsetTop || 0, height: window.visualViewport.height || window.innerHeight }
+            : { top: 0, height: window.innerHeight };
+          const r = scrollTarget.getBoundingClientRect();
+          const bottomView = vvRect.top + vvRect.height;
+          if (r.bottom > bottomView - 16 || r.top < vvRect.top + 16) {
+            formsContainer.scrollTop += (r.bottom - bottomView + 24);
+          }
+        } catch (_) { /* ignore */ }
+      }
+    };
+
+    try {
+      document.addEventListener('focusin', (e) => {
+        const t = e && e.target;
+        if (!t) return;
+        if (t.matches && t.matches('#modalAuthBackdrop input, #modalAuthBackdrop textarea, #modalAuthBackdrop select')) {
+          // Primeiro ajuste rápido; espera um pouco mais para o teclado aparecer de fato no Android
+          setTimeout(() => updateVh(), 50);
+          setTimeout(() => ensureInputVisible(t), 250);
+          setTimeout(() => ensureInputVisible(t), 550);
+        }
+      }, { passive: true });
+    } catch (_) { /* ignore */ }
   }
 
   static _authMode = 'local';

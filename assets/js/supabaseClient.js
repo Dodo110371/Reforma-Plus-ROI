@@ -205,10 +205,15 @@
         if (!c) return { error: new Error('Supabase não inicializado') };
         const origin = (window.location && window.location.origin) ? window.location.origin.replace(/\/$/, '') : '';
         try {
-          return await c.auth.signInWithOAuth({
+          const resp = await c.auth.signInWithOAuth({
             provider: 'google',
             options: { redirectTo: origin + '/' },
           });
+          const url = resp && resp.data && resp.data.url;
+          if (url && typeof window !== 'undefined' && window.location) {
+            try { window.location.assign(url); } catch (_) { window.location.href = url; }
+          }
+          return resp;
         } catch (e) {
           return { error: e };
         }
