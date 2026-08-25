@@ -931,7 +931,13 @@ class AppController {
     const submitBtn = document.getElementById(submitId);
     const errorEl = document.getElementById(errorId);
 
-    if (submitBtn) { submitBtn.disabled = true; const orig = submitBtn.textContent; submitBtn.dataset.origText = orig; submitBtn.textContent = '⏳ ' + orig; }
+    if (submitBtn) {
+      if (submitBtn.dataset.origText === undefined) {
+        submitBtn.dataset.origText = submitBtn.textContent || '';
+      }
+      submitBtn.disabled = true;
+      submitBtn.textContent = '⏳ ' + (submitBtn.dataset.origText || 'Enviando...');
+    }
     if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
 
     try {
@@ -963,23 +969,55 @@ class AppController {
 
       if (mode === 'signup') {
         if (!this._proSignupValidate()) {
-          if (errorEl) { errorEl.textContent = '⚠️ Verifique os dados e aceite os Termos de Uso.'; errorEl.style.display = 'block'; }
+          if (errorEl) { errorEl.textContent = '⚠️ Verifique os dados e aceite os Termos de Uso e Política de Privacidade.'; errorEl.style.display = 'block'; }
           return false;
         }
         const name = (document.getElementById('proauth-signup-name')?.value || '').trim();
         const email = (document.getElementById('proauth-signup-email')?.value || '').trim();
         const password = document.getElementById('proauth-signup-password')?.value || '';
-        const resp = await AuthManager.signUp(email, password, name);
+
+        let resp = null;
+        try {
+          resp = await AuthManager.signUpCloud({ email, password, fullName: name });
+        } catch (err) {
+          resp = { error: err };
+        }
+
         if (resp?.error) {
-          const msg = resp.error.message || 'Erro ao criar conta.';
+          const raw = String((resp.error && resp.error.message) ? resp.error.message : (resp.error.msg || resp.error.code || 'Erro ao criar conta.'));
+          let msg = raw;
+          if (/already registered|already\s+in\s+use|email.*exists|duplicate/i.test(raw)) {
+            msg = 'Este e-mail já possui uma conta. Use "Entrar" ou recupere a senha.';
+          } else if (/password.*too short|password.*weak|senha muito|at least/i.test(raw)) {
+            msg = 'A senha não atende aos requisitos de segurança exigidos.';
+          } else if (/disabled|signup|not allowed|signups disabled/i.test(raw)) {
+            msg = 'Cadastros temporariamente indisponíveis. Tente novamente mais tarde.';
+          }
           if (errorEl) { errorEl.textContent = '❌ ' + msg; errorEl.style.display = 'block'; }
-          this.showToast('Falha no cadastro: ' + msg);
+          this.showToast('Falha no cadastro: ' + msg, 'error', 6000);
           return false;
         }
-        this.showToast('✅ Conta criada! Verifique seu e-mail para confirmar.');
-        this.closeModalAuth();
-        this.updateAuthUI();
-        setTimeout(() => SupabaseSync.processQueue(), 500);
+
+        const user = resp?.data?.user || resp?.user || null;
+        const needsEmailConfirm = user && (user.email_confirmed_at == null && user.confirmation_sent_at != null);
+
+        if (needsEmailConfirm || (resp?.data && typeof resp.data.session === 'boolean' && resp.data.session === false)) {
+          this.showToast('✅ Conta criada! Verifique sua caixa de entrada e clique no link de confirmação recebido por e-mail.', 'success', 10000);
+          this._proAuthReset();
+          this._proAuthSwitchView('login');
+          const emailField = document.getElementById('proauth-login-email');
+          if (emailField) emailField.value = email;
+        } else {
+          const userId = (user && user.id) ? user.id : AuthManager.getCurrentUserId();
+          const existingProp = StorageManager.getPropertyInfo();
+          if (existingProp && (!existingProp.user_id || existingProp.user_id === 'local-user-admin') && userId) {
+            StorageManager.savePropertyInfo({ user_id: userId }, true);
+          }
+          this.showToast('✅ Conta criada e autenticada com sucesso!');
+          this.closeModalAuth();
+          this.updateAuthUI();
+          setTimeout(() => SupabaseSync.processQueue(), 500);
+        }
         return true;
       }
 
@@ -996,8 +1034,10 @@ class AppController {
           this.showToast('Falha: ' + msg);
           return false;
         }
-        this.showToast('📧 Link de recuperação enviado! Verifique sua caixa de entrada.');
+        this.showToast('📧 Link de recuperação enviado! Verifique sua caixa de entrada. Se não chegar, cheque a caixa de SPAM.', 'success', 9000);
         this._proAuthSwitchView('login');
+        const emailField = document.getElementById('proauth-login-email');
+        if (emailField) emailField.value = email;
         return true;
       }
 
@@ -1032,7 +1072,21 @@ class AppController {
     try {
       const resp = await SupabaseClient.auth.signInWithGoogle();
       if (resp?.error) {
-        this.showToast('⚠️ Login Google temporariamente indisponível: ' + (resp.error.message || ''));
+        const err = resp.error;
+        const code = String(err.code || '').toLowerCase();
+        const errorCode = String(err.error_code || '').toLowerCase();
+        const msg = String(err.message || err.msg || '').toLowerCase();
+        const isProviderDisabled = /not enabled|unsupported provider|provider.*not.*enabled|400.*validation.*failed/i.test(code + ' ' + errorCode + ' ' + msg);
+        if (isProviderDisabled) {
+          const origin = (window.location && window.location.origin) || '';
+          this.showToast(
+            '⚠️ Google OAuth desativado no Supabase. Habilite: Authentication → Providers → Google. Redirect URLs: ' + origin + ' e ' + origin + '/',
+            'error',
+            15000
+          );
+        } else {
+          this.showToast('⚠️ Login Google temporariamente indisponível: ' + (err.message || err.msg || ''));
+        }
       }
     } catch (err) {
       this.showToast('⚠️ Login Google temporariamente indisponível.');

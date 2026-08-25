@@ -203,11 +203,13 @@
       async signInWithGoogle() {
         const c = _bootClient();
         if (!c) return { error: new Error('Supabase não inicializado') };
-        const origin = (window.location && window.location.origin) ? window.location.origin.replace(/\/$/, '') : '';
+        const redirectTo = (window.location && window.location.origin)
+          ? String(window.location.origin).replace(/\/$/, '')
+          : '';
         try {
           const resp = await c.auth.signInWithOAuth({
             provider: 'google',
-            options: { redirectTo: origin + '/' },
+            options: { redirectTo: redirectTo },
           });
           const url = resp && resp.data && resp.data.url;
           if (url && typeof window !== 'undefined' && window.location) {
