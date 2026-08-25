@@ -2306,7 +2306,7 @@
         <section class="proauth-forms" aria-labelledby="proauth-title">
           <div class="proauth-forms-header">
             <div>
-              <h1 id="proauth-title" class="proauth-forms-title">🛡️ Acesso Profissional</h1>
+              <h1 id="proauth-title" class="proauth-forms-title">Área de Acesso</h1>
               <p class="proauth-forms-sub">Entre na sua conta ou crie uma nova para continuar.</p>
             </div>
             <button type="button" class="proauth-close-x" aria-label="Fechar" onclick="AppController.closeModalAuth()"
@@ -2317,9 +2317,9 @@
           <div class="proauth-tabs" role="tablist" aria-label="Tipo de acesso">
             <button type="button" class="proauth-tab-btn is-active" data-proauth-tab="login" role="tab"
               aria-selected="true" aria-controls="proauth-view-login"
-              onclick="AppController._proAuthSwitchView('login')">Entrar</button>
+              onclick="return AppController._proAuthSwitchView('login')">Entrar</button>
             <button type="button" class="proauth-tab-btn" data-proauth-tab="signup" role="tab" aria-selected="false"
-              aria-controls="proauth-view-signup" onclick="AppController._proAuthSwitchView('signup')">Criar
+              aria-controls="proauth-view-signup" onclick="return AppController._proAuthSwitchView('signup')">Criar
               conta</button>
           </div>
 
@@ -2356,7 +2356,7 @@
                   autocomplete="current-password" maxlength="128" required>
                 <button type="button" class="proauth-pwd-toggle" title="Mostrar/ocultar senha"
                   aria-label="Mostrar/ocultar senha"
-                  onclick="AppController._proAuthTogglePwd('proauth-login-password', this)">👁</button>
+                  onclick="return AppController._proAuthTogglePwd('proauth-login-password', this)">👁</button>
               </div>
             </div>
 
@@ -2365,7 +2365,8 @@
                 <input type="checkbox" id="proauth-login-remember" checked>
                 <span>Lembrar de mim</span>
               </label>
-              <button type="button" class="proauth-link" onclick="AppController._proAuthSwitchView('reset')">Esqueci
+              <button type="button" class="proauth-link"
+                onclick="return AppController._proAuthSwitchView('reset')">Esqueci
                 minha senha</button>
             </div>
 
@@ -2377,14 +2378,9 @@
 
             <div class="proauth-footer-actions">
               <span class="muted">Não tem conta?</span>
-              <button type="button" class="proauth-link" onclick="AppController._proAuthSwitchView('signup')">Criar
+              <button type="button" class="proauth-link"
+                onclick="return AppController._proAuthSwitchView('signup')">Criar
                 conta nova</button>
-            </div>
-
-            <div class="proauth-footer-actions" style="border-top:0; padding-top:0; margin-top:-0.25rem;">
-              <span class="muted">Modo offline?</span>
-              <button type="button" class="proauth-link" onclick="AppController._proAuthSwitchView('local')">📌 Entrar
-                com PIN</button>
             </div>
           </form>
 
@@ -2427,7 +2423,7 @@
                   oninput="AppController._proSignupValidate()">
                 <button type="button" class="proauth-pwd-toggle" title="Mostrar/ocultar senha"
                   aria-label="Mostrar/ocultar senha"
-                  onclick="AppController._proAuthTogglePwd('proauth-signup-password', this)">👁</button>
+                  onclick="return AppController._proAuthTogglePwd('proauth-signup-password', this)">👁</button>
               </div>
             </div>
 
@@ -2448,7 +2444,7 @@
                   oninput="AppController._proSignupValidate()">
                 <button type="button" class="proauth-pwd-toggle" title="Mostrar/ocultar senha"
                   aria-label="Mostrar/ocultar senha"
-                  onclick="AppController._proAuthTogglePwd('proauth-signup-password2', this)">👁</button>
+                  onclick="return AppController._proAuthTogglePwd('proauth-signup-password2', this)">👁</button>
               </div>
             </div>
 
@@ -2469,7 +2465,7 @@
             <div class="proauth-footer-actions">
               <span class="muted">Já tem conta?</span>
               <button type="button" class="proauth-link"
-                onclick="AppController._proAuthSwitchView('login')">Entrar</button>
+                onclick="return AppController._proAuthSwitchView('login')">Entrar</button>
             </div>
           </form>
 
@@ -2495,7 +2491,8 @@
 
             <div class="proauth-footer-actions">
               <span class="muted">Lembrou a senha?</span>
-              <button type="button" class="proauth-link" onclick="AppController._proAuthSwitchView('login')">⬅︎ Voltar
+              <button type="button" class="proauth-link" onclick="return AppController._proAuthSwitchView('login')">⬅︎
+                Voltar
                 para Entrar</button>
             </div>
           </form>
@@ -2514,7 +2511,7 @@
                   placeholder="Digite a senha (padrão: 1234)" autocomplete="current-password" maxlength="64" required>
                 <button type="button" class="proauth-pwd-toggle" title="Mostrar/ocultar senha"
                   aria-label="Mostrar/ocultar senha"
-                  onclick="AppController._proAuthTogglePwd('proauth-local-pin', this)">👁</button>
+                  onclick="return AppController._proAuthTogglePwd('proauth-local-pin', this)">👁</button>
               </div>
             </div>
 
@@ -2526,7 +2523,8 @@
 
             <div class="proauth-footer-actions">
               <span class="muted">Tem conta nuvem?</span>
-              <button type="button" class="proauth-link" onclick="AppController._proAuthSwitchView('login')">⬅︎ Voltar
+              <button type="button" class="proauth-link" onclick="return AppController._proAuthSwitchView('login')">⬅︎
+                Voltar
                 para Entrar</button>
             </div>
           </form>

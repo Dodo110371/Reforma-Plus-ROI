@@ -777,11 +777,13 @@ class AppController {
       const focusId = focusMap[viewName];
       if (focusId) document.getElementById(focusId)?.focus();
     }, 100);
+
+    return false;
   }
 
   static _proAuthTogglePwd(inputId, btn) {
     const input = document.getElementById(inputId);
-    if (!input) return;
+    if (!input) return false;
     if (input.type === 'password') {
       input.type = 'text';
       if (btn) btn.textContent = '🙈';
@@ -789,6 +791,7 @@ class AppController {
       input.type = 'password';
       if (btn) btn.textContent = '👁';
     }
+    return false;
   }
 
   static _proSignupValidate() {
@@ -960,6 +963,7 @@ class AppController {
     } catch (err) {
       this.showToast('⚠️ Login Google temporariamente indisponível.');
     }
+    return false;
   }
 
   static closeModalAuth() {
