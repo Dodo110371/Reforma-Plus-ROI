@@ -410,6 +410,492 @@
         font-size: 1rem;
       }
     }
+
+    /* ============================================================
+       MODAL: ACESSO PROFISSIONAL (🛡️ Login / Cadastro / Recuperação)
+       ============================================================ */
+    #modalAuthBackdrop .modal-box[role="dialog"] {
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .proauth-root {
+      display: grid;
+      grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+      width: 100%;
+      max-width: 940px;
+      min-height: 580px;
+    }
+
+    /* --- Coluna Esquerda: Branding Verde --- */
+    .proauth-brand {
+      position: relative;
+      padding: 2.5rem 2rem 2rem;
+      color: #fff;
+      background:
+        radial-gradient(120% 120% at 0% 0%, rgba(52, 211, 153, 0.55), transparent 55%),
+        radial-gradient(120% 120% at 100% 100%, rgba(4, 120, 87, 0.75), transparent 55%),
+        linear-gradient(145deg, #059669 0%, #10b981 45%, #047857 100%);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 1.75rem;
+    }
+
+    .proauth-brand::after {
+      content: "";
+      position: absolute;
+      width: 420px;
+      height: 420px;
+      right: -180px;
+      bottom: -220px;
+      background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.12), transparent 60%);
+      pointer-events: none;
+    }
+
+    .proauth-brand-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.45rem 0.9rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      backdrop-filter: blur(6px);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      width: fit-content;
+    }
+
+    .proauth-brand-title {
+      font-family: "Outfit", "Inter", system-ui, sans-serif;
+      font-weight: 800;
+      font-size: 2rem;
+      line-height: 1.15;
+      margin: 0;
+      color: #ecfdf5;
+      letter-spacing: -0.01em;
+    }
+
+    .proauth-brand-subtitle {
+      font-size: 0.92rem;
+      line-height: 1.55;
+      color: rgba(236, 253, 245, 0.85);
+      margin: 0;
+      max-width: 36ch;
+    }
+
+    .proauth-brand-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+
+    .proauth-brand-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.65rem;
+      font-size: 0.85rem;
+      color: rgba(236, 253, 245, 0.92);
+      line-height: 1.45;
+    }
+
+    .proauth-brand-list .pbi {
+      flex: 0 0 auto;
+      width: 22px;
+      height: 22px;
+      display: grid;
+      place-items: center;
+      border-radius: 7px;
+      background: rgba(255, 255, 255, 0.14);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 0.8rem;
+      font-weight: 800;
+    }
+
+    .proauth-brand-footer {
+      margin-top: auto;
+      font-size: 0.75rem;
+      color: rgba(236, 253, 245, 0.68);
+      line-height: 1.5;
+    }
+
+    /* --- Coluna Direita: Formulários --- */
+    .proauth-forms {
+      display: flex;
+      flex-direction: column;
+      padding: 1.6rem 2rem 1.8rem;
+      background: var(--bg-card, #0f172a);
+      position: relative;
+    }
+
+    [data-theme="light"] .proauth-forms {
+      background: var(--bg-card, #ffffff);
+    }
+
+    .proauth-forms-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .proauth-forms-title {
+      font-family: "Outfit", "Inter", system-ui, sans-serif;
+      font-weight: 800;
+      font-size: 1.5rem;
+      line-height: 1.2;
+      color: var(--text-main, #f8fafc);
+      margin: 0 0 0.25rem 0;
+      letter-spacing: -0.01em;
+    }
+
+    .proauth-forms-sub {
+      font-size: 0.88rem;
+      color: var(--text-muted, #94a3b8);
+      margin: 0;
+      line-height: 1.45;
+    }
+
+    .proauth-close-x {
+      border: 0;
+      background: transparent;
+      color: var(--text-dim, #64748b);
+      cursor: pointer;
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      font-size: 1.1rem;
+      transition: all 0.18s ease;
+      flex: 0 0 auto;
+    }
+
+    .proauth-close-x:hover {
+      background: rgba(148, 163, 184, 0.12);
+      color: var(--text-main, #f8fafc);
+      transform: translateY(-1px);
+    }
+
+    .proauth-tabs {
+      display: inline-flex;
+      padding: 4px;
+      margin: 1.1rem 0 1.1rem;
+      border-radius: 12px;
+      background: rgba(148, 163, 184, 0.1);
+      border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+      position: relative;
+      width: fit-content;
+    }
+
+    .proauth-tab-btn {
+      appearance: none;
+      -webkit-appearance: none;
+      border: 0;
+      background: transparent;
+      color: var(--text-dim, #64748b);
+      padding: 0.5rem 1rem;
+      font-size: 0.86rem;
+      font-weight: 700;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+      z-index: 1;
+    }
+
+    .proauth-tab-btn.is-active {
+      background: linear-gradient(180deg, rgba(16, 185, 129, 0.22), rgba(16, 185, 129, 0.08));
+      color: var(--accent-emerald, #10b981);
+      box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.35);
+    }
+
+    /* Views */
+    .proauth-view {
+      display: none;
+      flex-direction: column;
+      gap: 0.9rem;
+    }
+
+    .proauth-view.is-visible {
+      display: flex;
+    }
+
+    .proauth-view-title {
+      font-family: "Outfit", "Inter", system-ui, sans-serif;
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: var(--text-main, #f8fafc);
+      margin: 0 0 -0.1rem 0;
+    }
+
+    .proauth-view-text {
+      font-size: 0.85rem;
+      color: var(--text-muted, #94a3b8);
+      margin: 0;
+      line-height: 1.5;
+    }
+
+    /* Botão Google */
+    .proauth-google-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      padding: 0.7rem 1rem;
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+      background: var(--bg-card, #0f172a);
+      color: var(--text-main, #f8fafc);
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    [data-theme="light"] .proauth-google-btn {
+      background: #ffffff;
+    }
+
+    .proauth-google-btn:hover {
+      background: rgba(148, 163, 184, 0.12);
+      transform: translateY(-1px);
+      border-color: rgba(16, 185, 129, 0.45);
+    }
+
+    .proauth-google-btn svg {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 auto;
+    }
+
+    .proauth-separator {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      color: var(--text-dim, #64748b);
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin: 0.15rem 0 0;
+    }
+
+    .proauth-separator::before,
+    .proauth-separator::after {
+      content: "";
+      flex: 1 1 auto;
+      height: 1px;
+      background: var(--border-color, rgba(255, 255, 255, 0.08));
+    }
+
+    /* Campos com wrapper do botão show/hide senha */
+    .proauth-password-wrap {
+      position: relative;
+    }
+
+    .proauth-password-wrap .form-input {
+      padding-right: 44px;
+    }
+
+    .proauth-pwd-toggle {
+      position: absolute;
+      top: 50%;
+      right: 8px;
+      transform: translateY(-50%);
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border: 0;
+      background: transparent;
+      color: var(--text-dim, #64748b);
+      cursor: pointer;
+      border-radius: 8px;
+      font-size: 1rem;
+      transition: all 0.18s ease;
+    }
+
+    .proauth-pwd-toggle:hover {
+      background: rgba(148, 163, 184, 0.12);
+      color: var(--text-main, #f8fafc);
+    }
+
+    .proauth-row-between {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin: -0.1rem 0 0.35rem;
+    }
+
+    .proauth-checkbox {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--text-muted, #94a3b8);
+      font-size: 0.85rem;
+      user-select: none;
+      cursor: pointer;
+      line-height: 1.35;
+    }
+
+    .proauth-checkbox input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent-emerald, #10b981);
+      cursor: pointer;
+    }
+
+    .proauth-link {
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: var(--accent-emerald, #10b981);
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: underline;
+      text-decoration-color: rgba(16, 185, 129, 0.4);
+      text-underline-offset: 3px;
+      transition: color 0.15s ease;
+    }
+
+    .proauth-link:hover {
+      color: #34d399;
+    }
+
+    .proauth-submit {
+      margin-top: 0.25rem;
+    }
+
+    .proauth-submit .btn-primary {
+      width: 100%;
+      padding: 0.82rem 1rem;
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+
+    .proauth-submit .btn-primary:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .proauth-footer-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-top: 0.35rem;
+      padding-top: 0.75rem;
+      border-top: 1px dashed var(--border-color, rgba(255, 255, 255, 0.08));
+    }
+
+    .proauth-footer-actions .muted {
+      font-size: 0.78rem;
+      color: var(--text-dim, #64748b);
+    }
+
+    /* Password Hints + Validation List */
+    .proauth-pwd-req-list {
+      list-style: none;
+      padding: 0.6rem 0.7rem;
+      margin: 0;
+      display: grid;
+      gap: 0.35rem;
+      background: rgba(16, 185, 129, 0.06);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      border-radius: 10px;
+    }
+
+    .proauth-pwd-req-list li {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      color: var(--text-muted, #94a3b8);
+      font-weight: 500;
+    }
+
+    .proauth-pwd-req-list li.is-ok {
+      color: var(--status-success, #10b981);
+      font-weight: 600;
+    }
+
+    .proauth-pwd-req-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 0.65rem;
+      font-weight: 800;
+      background: rgba(148, 163, 184, 0.18);
+      color: var(--text-dim, #64748b);
+      flex: 0 0 auto;
+    }
+
+    .proauth-pwd-req-list li.is-ok .proauth-pwd-req-dot {
+      background: rgba(16, 185, 129, 0.2);
+      color: #10b981;
+    }
+
+    .proauth-hint {
+      font-size: 0.78rem;
+      color: var(--text-dim, #64748b);
+      line-height: 1.45;
+      margin: -0.2rem 0 0;
+    }
+
+    .proauth-error-inline {
+      font-size: 0.82rem;
+      color: var(--status-danger, #ef4444);
+      background: rgba(239, 68, 68, 0.08);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      padding: 0.6rem 0.8rem;
+      border-radius: 10px;
+      line-height: 1.4;
+    }
+
+    /* Mobile < 640px: empilhar, Entrar primeiro (esconder branding) */
+    @media (max-width: 639.98px) {
+      .proauth-root {
+        grid-template-columns: 1fr;
+        min-height: 0;
+      }
+
+      .proauth-brand {
+        display: none;
+      }
+
+      .proauth-forms {
+        padding: 1.25rem 1.25rem 1.5rem;
+      }
+
+      .proauth-forms-title {
+        font-size: 1.35rem;
+      }
+
+      #modalAuthBackdrop .modal-box[role="dialog"] {
+        max-width: 480px;
+        width: calc(100% - 24px);
+      }
+    }
+
+    @media (min-width: 640px) {
+      #modalAuthBackdrop .modal-box[role="dialog"] {
+        max-width: 940px;
+      }
+    }
   </style>
 </head>
 
@@ -1773,72 +2259,279 @@
     </div>
   </nav>
 
-  <!-- Modal de Autenticação / Login Admin (Híbrido: Supabase + PIN Local) -->
+  <!-- Modal de Autenticação / Acesso Profissional (Nuvem Supabase + Local PIN) -->
   <div id="modalAuthBackdrop" class="modal-backdrop">
-    <div class="modal-box" style="max-width: 440px;">
-      <div class="modal-header">
-        <h3 class="modal-title">🔐 Acesso Restrito ao Administrador</h3>
-        <button class="btn btn-outline btn-sm" onclick="AppController.closeModalAuth()">✖️</button>
-      </div>
-      <div class="modal-body">
-        <div id="authModeTabs"
-          style="display:flex; gap:0.5rem; margin-bottom:1.25rem; border-bottom:1px solid var(--border-color); padding-bottom:0.75rem;">
-          <button type="button" id="authModeCloudBtn" class="btn btn-sm btn-outline"
-            onclick="AppController.switchAuthMode('cloud')" style="flex:1;">
-            ☁️ Nuvem (Supabase)
-          </button>
-          <button type="button" id="authModeLocalBtn" class="btn btn-sm btn-outline"
-            onclick="AppController.switchAuthMode('local')" style="flex:1;">
-            📌 Local (PIN)
-          </button>
-        </div>
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="proauth-title">
+      <div class="proauth-root">
 
-        <div id="authCloudNotice"
-          style="font-size:0.82rem; color:var(--info-color); background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.2); padding:0.55rem 0.75rem; border-radius:10px; margin-bottom:1rem; display:none;">
-          ⓘ Conectado ao Supabase. Use seu email e senha para sincronizar dados com a nuvem.
-        </div>
-        <div id="authLocalNotice"
-          style="font-size:0.82rem; color:var(--text-muted); background:rgba(120,120,130,0.08); border:1px solid var(--border-color); padding:0.55rem 0.75rem; border-radius:10px; margin-bottom:1rem; display:none;">
-          ⓘ Modo offline. Alterações ficam apenas neste navegador até conectar ao Supabase.
-        </div>
+        <!-- COLUNA ESQUERDA: Branding Verde (desktop only) -->
+        <aside class="proauth-brand" aria-hidden="false">
+          <div class="proauth-brand-badge">
+            <span>🏗️</span>
+            <span>REFORMAPLUS ROI · PRO</span>
+          </div>
 
-        <form id="authLoginForm">
-          <div id="authCloudFields">
-            <div class="form-group">
-              <label class="form-label" for="authEmailInput">E-mail</label>
-              <input type="email" id="authEmailInput" class="form-input" placeholder="seu@email.com"
-                autocomplete="email">
+          <div>
+            <h2 class="proauth-brand-title">Gestão de obras e Flip Imobiliário com segurança profissional.</h2>
+            <p class="proauth-brand-subtitle">Sincronize seus lançamentos, recibos, imóveis e relatórios entre
+              dispositivos com o Supabase. 100% offline-first quando precisar.</p>
+          </div>
+
+          <ul class="proauth-brand-list">
+            <li>
+              <span class="pbi">☁️</span>
+              <span>Sincronia em nuvem Supabase com sessão persistente em múltiplos dispositivos.</span>
+            </li>
+            <li>
+              <span class="pbi">🔐</span>
+              <span>Autenticação 128-bit, login Google, recuperação de senha e termos LGPD.</span>
+            </li>
+            <li>
+              <span class="pbi">🏡</span>
+              <span>Painéis multi-imóveis, dashboards, gráficos donut e exportação CSV/PDF.</span>
+            </li>
+            <li>
+              <span class="pbi">📲</span>
+              <span>PWA instalável em Android e Desktop, funciona mesmo sem internet.</span>
+            </li>
+          </ul>
+
+          <div class="proauth-brand-footer">
+            © 2026 ReformaPlus ROI · Todos os direitos reservados.
+            <br>Dados processados em conformidade com a LGPD.
+          </div>
+        </aside>
+
+        <!-- COLUNA DIREITA: Formulários -->
+        <section class="proauth-forms" aria-labelledby="proauth-title">
+          <div class="proauth-forms-header">
+            <div>
+              <h1 id="proauth-title" class="proauth-forms-title">🛡️ Acesso Profissional</h1>
+              <p class="proauth-forms-sub">Entre na sua conta ou crie uma nova para continuar.</p>
             </div>
+            <button type="button" class="proauth-close-x" aria-label="Fechar" onclick="AppController.closeModalAuth()"
+              title="Fechar (Esc)">✖︎</button>
+          </div>
+
+          <!-- Abas -->
+          <div class="proauth-tabs" role="tablist" aria-label="Tipo de acesso">
+            <button type="button" class="proauth-tab-btn is-active" data-proauth-tab="login" role="tab"
+              aria-selected="true" aria-controls="proauth-view-login"
+              onclick="AppController._proAuthSwitchView('login')">Entrar</button>
+            <button type="button" class="proauth-tab-btn" data-proauth-tab="signup" role="tab" aria-selected="false"
+              aria-controls="proauth-view-signup" onclick="AppController._proAuthSwitchView('signup')">Criar
+              conta</button>
+          </div>
+
+          <!-- VIEW: LOGIN (Entrar) -->
+          <form class="proauth-view is-visible" id="proauth-view-login" role="tabpanel"
+            aria-labelledby="proauth-tab-login" data-proauth-view="login"
+            onsubmit="return AppController._proHandleSubmit(event, 'login')" novalidate>
+            <button type="button" class="proauth-google-btn" onclick="return AppController._proGoogle('login')">
+              <svg viewBox="0 0 48 48" aria-hidden="true">
+                <path fill="#FFC107"
+                  d="M43.6 20.5H42V20H24v8h11.3C33.7 33.3 29.4 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.3 0 6.2 1.2 8.4 3.2l5.7-5.7C34.3 5.3 29.5 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21 21-9.4 21-21c0-1.4-.2-2.7-.4-3.9z" />
+                <path fill="#FF3D00"
+                  d="M6.3 14.7l6.6 4.8C14.7 15.1 19 11.9 24 11.9c3.3 0 6.2 1.2 8.4 3.2l5.7-5.7C34.3 5.3 29.5 3 24 3 16.3 3 9.7 7.1 6.3 14.7z" />
+                <path fill="#4CAF50"
+                  d="M24 45c5.4 0 10.3-2 14-5.4l-6.5-5.4c-2 1.4-4.5 2.3-7.5 2.3-5.4 0-9.9-3.7-11.3-8.6l-6.5 5C9.6 41.7 16.2 45 24 45z" />
+                <path fill="#1976D2"
+                  d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.2-4.3 5.5l6.5 5.4c-.4.4 6.5-4.7 6.5-14.9 0-1.4-.2-2.7-.4-3.9z" />
+              </svg>
+              Entrar com Google
+            </button>
+
+            <div class="proauth-separator"><span>ou</span></div>
+
             <div class="form-group">
-              <label class="form-label" for="authPasswordInput">Senha</label>
-              <input type="password" id="authPasswordInput" class="form-input" placeholder="Sua senha do Supabase"
-                autocomplete="current-password">
+              <label class="form-label" for="proauth-login-email">E-mail</label>
+              <input type="email" id="proauth-login-email" class="form-input" placeholder="seu@email.com"
+                autocomplete="email" maxlength="255" required inputmode="email">
             </div>
-          </div>
 
-          <div id="authLocalFields">
             <div class="form-group">
-              <label class="form-label" for="authPinInput">Senha de Acesso (PIN)</label>
-              <input type="password" id="authPinInput" class="form-input" placeholder="Digite a senha (padrão: 1234)"
-                autocomplete="current-password">
+              <label class="form-label" for="proauth-login-password">Senha</label>
+              <div class="proauth-password-wrap">
+                <input type="password" id="proauth-login-password" class="form-input" placeholder="Sua senha"
+                  autocomplete="current-password" maxlength="128" required>
+                <button type="button" class="proauth-pwd-toggle" title="Mostrar/ocultar senha"
+                  aria-label="Mostrar/ocultar senha"
+                  onclick="AppController._proAuthTogglePwd('proauth-login-password', this)">👁</button>
+              </div>
             </div>
-          </div>
 
-          <div id="authErrorMsg"
-            style="color: var(--status-danger); font-size: 0.85rem; margin-top: 0.5rem; display: none;">
-            ❌ Acesso negado! Verifique suas credenciais.
-          </div>
+            <div class="proauth-row-between">
+              <label class="proauth-checkbox">
+                <input type="checkbox" id="proauth-login-remember" checked>
+                <span>Lembrar de mim</span>
+              </label>
+              <button type="button" class="proauth-link" onclick="AppController._proAuthSwitchView('reset')">Esqueci
+                minha senha</button>
+            </div>
 
-          <div id="authLoadingHint"
-            style="color: var(--text-muted); font-size: 0.82rem; margin-top: 0.75rem; display: none;">
-            ⏳ Entrando...
-          </div>
+            <div class="proauth-submit">
+              <button type="submit" class="btn btn-primary" id="proauth-login-submit">Entrar</button>
+            </div>
 
-          <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
-            <button type="button" class="btn btn-outline" onclick="AppController.closeModalAuth()">Cancelar</button>
-            <button type="submit" id="authSubmitBtn" class="btn btn-primary">Entrar</button>
-          </div>
-        </form>
+            <div class="proauth-error-inline" id="proauth-login-error" style="display:none;"></div>
+
+            <div class="proauth-footer-actions">
+              <span class="muted">Não tem conta?</span>
+              <button type="button" class="proauth-link" onclick="AppController._proAuthSwitchView('signup')">Criar
+                conta nova</button>
+            </div>
+
+            <div class="proauth-footer-actions" style="border-top:0; padding-top:0; margin-top:-0.25rem;">
+              <span class="muted">Modo offline?</span>
+              <button type="button" class="proauth-link" onclick="AppController._proAuthSwitchView('local')">📌 Entrar
+                com PIN</button>
+            </div>
+          </form>
+
+          <!-- VIEW: SIGNUP (Criar conta) -->
+          <form class="proauth-view" id="proauth-view-signup" role="tabpanel" aria-labelledby="proauth-tab-signup"
+            data-proauth-view="signup" onsubmit="return AppController._proHandleSubmit(event, 'signup')" novalidate>
+            <button type="button" class="proauth-google-btn" onclick="return AppController._proGoogle('signup')">
+              <svg viewBox="0 0 48 48" aria-hidden="true">
+                <path fill="#FFC107"
+                  d="M43.6 20.5H42V20H24v8h11.3C33.7 33.3 29.4 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.3 0 6.2 1.2 8.4 3.2l5.7-5.7C34.3 5.3 29.5 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21 21-9.4 21-21c0-1.4-.2-2.7-.4-3.9z" />
+                <path fill="#FF3D00"
+                  d="M6.3 14.7l6.6 4.8C14.7 15.1 19 11.9 24 11.9c3.3 0 6.2 1.2 8.4 3.2l5.7-5.7C34.3 5.3 29.5 3 24 3 16.3 3 9.7 7.1 6.3 14.7z" />
+                <path fill="#4CAF50"
+                  d="M24 45c5.4 0 10.3-2 14-5.4l-6.5-5.4c-2 1.4-4.5 2.3-7.5 2.3-5.4 0-9.9-3.7-11.3-8.6l-6.5 5C9.6 41.7 16.2 45 24 45z" />
+                <path fill="#1976D2"
+                  d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.2-4.3 5.5l6.5 5.4c-.4.4 6.5-4.7 6.5-14.9 0-1.4-.2-2.7-.4-3.9z" />
+              </svg>
+              Cadastrar com Google
+            </button>
+
+            <div class="proauth-separator"><span>ou</span></div>
+
+            <div class="form-group">
+              <label class="form-label" for="proauth-signup-name">Nome completo</label>
+              <input type="text" id="proauth-signup-name" class="form-input" placeholder="Nome e sobrenome"
+                autocomplete="name" maxlength="150" oninput="AppController._proSignupValidate()">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="proauth-signup-email">E-mail</label>
+              <input type="email" id="proauth-signup-email" class="form-input" placeholder="seu@email.com"
+                autocomplete="email" maxlength="255" inputmode="email" oninput="AppController._proSignupValidate()">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="proauth-signup-password">Senha</label>
+              <div class="proauth-password-wrap">
+                <input type="password" id="proauth-signup-password" class="form-input"
+                  placeholder="No mínimo 8 caracteres" autocomplete="new-password" maxlength="128"
+                  oninput="AppController._proSignupValidate()">
+                <button type="button" class="proauth-pwd-toggle" title="Mostrar/ocultar senha"
+                  aria-label="Mostrar/ocultar senha"
+                  onclick="AppController._proAuthTogglePwd('proauth-signup-password', this)">👁</button>
+              </div>
+            </div>
+
+            <ul class="proauth-pwd-req-list" aria-live="polite" id="proauth-pwd-req-list">
+              <li data-req="len"><span class="proauth-pwd-req-dot">·</span>No mínimo 8 caracteres</li>
+              <li data-req="upper"><span class="proauth-pwd-req-dot">·</span>Pelo menos 1 letra maiúscula</li>
+              <li data-req="lower"><span class="proauth-pwd-req-dot">·</span>Pelo menos 1 letra minúscula</li>
+              <li data-req="num"><span class="proauth-pwd-req-dot">·</span>Pelo menos 1 número</li>
+              <li data-req="sym"><span class="proauth-pwd-req-dot">·</span>Pelo menos 1 caractere especial (!@#$%^&amp;*
+                etc.)</li>
+            </ul>
+
+            <div class="form-group">
+              <label class="form-label" for="proauth-signup-password2">Confirmar senha</label>
+              <div class="proauth-password-wrap">
+                <input type="password" id="proauth-signup-password2" class="form-input"
+                  placeholder="Repita a senha acima" autocomplete="new-password" maxlength="128"
+                  oninput="AppController._proSignupValidate()">
+                <button type="button" class="proauth-pwd-toggle" title="Mostrar/ocultar senha"
+                  aria-label="Mostrar/ocultar senha"
+                  onclick="AppController._proAuthTogglePwd('proauth-signup-password2', this)">👁</button>
+              </div>
+            </div>
+
+            <p class="proauth-hint">💡 Dicas para uma senha segura: misture letras, números e símbolos. Evite datas de
+              nascimento, nomes ou sequências (ex.: 123456, qwerty). Quanto mais longa, mais forte.</p>
+
+            <label class="proauth-checkbox" style="margin-top:0.15rem;">
+              <input type="checkbox" id="proauth-signup-terms" onchange="AppController._proSignupValidate()">
+              <span>Li e aceito os <b>Termos de Uso</b> e a <b>Política de Privacidade</b>.</span>
+            </label>
+
+            <div class="proauth-submit">
+              <button type="submit" class="btn btn-primary" id="proauth-signup-submit" disabled>Criar conta</button>
+            </div>
+
+            <div class="proauth-error-inline" id="proauth-signup-error" style="display:none;"></div>
+
+            <div class="proauth-footer-actions">
+              <span class="muted">Já tem conta?</span>
+              <button type="button" class="proauth-link"
+                onclick="AppController._proAuthSwitchView('login')">Entrar</button>
+            </div>
+          </form>
+
+          <!-- VIEW: RESET (Recuperar senha) -->
+          <form class="proauth-view" id="proauth-view-reset" role="tabpanel" data-proauth-view="reset"
+            onsubmit="return AppController._proHandleSubmit(event, 'reset')" novalidate>
+            <p class="proauth-view-title">🔑 Recuperar senha</p>
+            <p class="proauth-view-text">Informe o e-mail cadastrado. Enviaremos um link para redefinir sua senha. O
+              link expira em algumas horas.</p>
+
+            <div class="form-group">
+              <label class="form-label" for="proauth-reset-email">E-mail da conta</label>
+              <input type="email" id="proauth-reset-email" class="form-input" placeholder="seu@email.com"
+                autocomplete="email" maxlength="255" required inputmode="email">
+            </div>
+
+            <div class="proauth-submit">
+              <button type="submit" class="btn btn-primary" id="proauth-reset-submit">Enviar link de
+                recuperação</button>
+            </div>
+
+            <div class="proauth-error-inline" id="proauth-reset-error" style="display:none;"></div>
+
+            <div class="proauth-footer-actions">
+              <span class="muted">Lembrou a senha?</span>
+              <button type="button" class="proauth-link" onclick="AppController._proAuthSwitchView('login')">⬅︎ Voltar
+                para Entrar</button>
+            </div>
+          </form>
+
+          <!-- VIEW: LOCAL (Acesso PIN offline) -->
+          <form class="proauth-view" id="proauth-view-local" role="tabpanel" data-proauth-view="local"
+            onsubmit="return AppController._proHandleSubmit(event, 'local')" novalidate>
+            <p class="proauth-view-title">📌 Acesso Local (PIN)</p>
+            <p class="proauth-view-text">Use este modo quando estiver offline ou queira operar apenas no navegador
+              atual. As alterações ficam salvas apenas neste dispositivo até conectar a nuvem.</p>
+
+            <div class="form-group">
+              <label class="form-label" for="proauth-local-pin">Senha de Acesso (PIN)</label>
+              <div class="proauth-password-wrap">
+                <input type="password" id="proauth-local-pin" class="form-input"
+                  placeholder="Digite a senha (padrão: 1234)" autocomplete="current-password" maxlength="64" required>
+                <button type="button" class="proauth-pwd-toggle" title="Mostrar/ocultar senha"
+                  aria-label="Mostrar/ocultar senha"
+                  onclick="AppController._proAuthTogglePwd('proauth-local-pin', this)">👁</button>
+              </div>
+            </div>
+
+            <div class="proauth-submit">
+              <button type="submit" class="btn btn-primary" id="proauth-local-submit">Entrar modo local</button>
+            </div>
+
+            <div class="proauth-error-inline" id="proauth-local-error" style="display:none;"></div>
+
+            <div class="proauth-footer-actions">
+              <span class="muted">Tem conta nuvem?</span>
+              <button type="button" class="proauth-link" onclick="AppController._proAuthSwitchView('login')">⬅︎ Voltar
+                para Entrar</button>
+            </div>
+          </form>
+
+        </section>
       </div>
     </div>
   </div>

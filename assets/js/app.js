@@ -703,24 +703,263 @@ class AppController {
 
   static openModalAuth() {
     const modalBackdrop = document.getElementById('modalAuthBackdrop');
-    const errorMsg = document.getElementById('authErrorMsg');
-    const loadingHint = document.getElementById('authLoadingHint');
-    const submitBtn = document.getElementById('authSubmitBtn');
-
-    if (errorMsg) errorMsg.style.display = 'none';
-    if (loadingHint) loadingHint.style.display = 'none';
-    if (submitBtn) submitBtn.disabled = false;
-    const pinInput = document.getElementById('authPinInput');
-    if (pinInput) pinInput.value = '';
-    const emailInput = document.getElementById('authEmailInput');
-    if (emailInput) emailInput.value = '';
-    const passInput = document.getElementById('authPasswordInput');
-    if (passInput) passInput.value = '';
-
-    const supabaseEnabled = !!window.SupabaseClient?.isEnabled?.();
-    this.switchAuthMode(supabaseEnabled ? 'cloud' : 'local');
-
+    this._proAuthReset();
+    this._proAuthSwitchView('login');
     if (modalBackdrop) modalBackdrop.classList.add('active');
+  }
+
+  static _proAuthReset() {
+    document.querySelectorAll('.proauth-error-inline').forEach(el => {
+      el.style.display = 'none';
+      el.textContent = '';
+    });
+
+    const idsToClear = [
+      'proauth-login-email', 'proauth-login-password',
+      'proauth-signup-name', 'proauth-signup-email',
+      'proauth-signup-password', 'proauth-signup-password2',
+      'proauth-reset-email', 'proauth-local-pin'
+    ];
+    idsToClear.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+
+    const remember = document.getElementById('proauth-login-remember');
+    if (remember) remember.checked = true;
+    const terms = document.getElementById('proauth-signup-terms');
+    if (terms) terms.checked = false;
+
+    const signupSubmit = document.getElementById('proauth-signup-submit');
+    if (signupSubmit) signupSubmit.disabled = true;
+
+    ['proauth-login-submit', 'proauth-signup-submit', 'proauth-reset-submit', 'proauth-local-submit'].forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) btn.disabled = false;
+    });
+
+    this._proSignupValidate();
+  }
+
+  static _proAuthSwitchView(viewName) {
+    const views = document.querySelectorAll('.proauth-view');
+    views.forEach(v => v.classList.remove('is-visible'));
+
+    const targetView = document.querySelector(`.proauth-view[data-proauth-view="${viewName}"]`);
+    if (targetView) targetView.classList.add('is-visible');
+
+    const tabsContainer = document.querySelector('.proauth-tabs');
+    const tabBtns = document.querySelectorAll('.proauth-tab-btn');
+
+    if (viewName === 'login' || viewName === 'signup') {
+      if (tabsContainer) tabsContainer.style.display = '';
+      tabBtns.forEach(btn => {
+        const tab = btn.getAttribute('data-proauth-tab');
+        const isActive = tab === viewName;
+        btn.classList.toggle('is-active', isActive);
+        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+    } else {
+      if (tabsContainer) tabsContainer.style.display = 'none';
+      tabBtns.forEach(btn => btn.classList.remove('is-active'));
+    }
+
+    const errorEl = document.getElementById(`proauth-${viewName}-error`);
+    if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
+
+    setTimeout(() => {
+      const focusMap = {
+        login: 'proauth-login-email',
+        signup: 'proauth-signup-name',
+        reset: 'proauth-reset-email',
+        local: 'proauth-local-pin'
+      };
+      const focusId = focusMap[viewName];
+      if (focusId) document.getElementById(focusId)?.focus();
+    }, 100);
+  }
+
+  static _proAuthTogglePwd(inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    if (input.type === 'password') {
+      input.type = 'text';
+      if (btn) btn.textContent = '🙈';
+    } else {
+      input.type = 'password';
+      if (btn) btn.textContent = '👁';
+    }
+  }
+
+  static _proSignupValidate() {
+    const nameInput = document.getElementById('proauth-signup-name');
+    const emailInput = document.getElementById('proauth-signup-email');
+    const pwdInput = document.getElementById('proauth-signup-password');
+    const pwd2Input = document.getElementById('proauth-signup-password2');
+    const termsInput = document.getElementById('proauth-signup-terms');
+    const submitBtn = document.getElementById('proauth-signup-submit');
+    const errorEl = document.getElementById('proauth-signup-error');
+
+    const name = (nameInput?.value || '').trim();
+    const email = (emailInput?.value || '').trim();
+    const pwd = pwdInput?.value || '';
+    const pwd2 = pwd2Input?.value || '';
+    const terms = !!termsInput?.checked;
+
+    const checks = {
+      len: pwd.length >= 8,
+      upper: /[A-Z]/.test(pwd),
+      lower: /[a-z]/.test(pwd),
+      num: /[0-9]/.test(pwd),
+      sym: /[^A-Za-z0-9]/.test(pwd)
+    };
+
+    const reqList = document.getElementById('proauth-pwd-req-list');
+    if (reqList) {
+      reqList.querySelectorAll('li[data-req]').forEach(li => {
+        const key = li.getAttribute('data-req');
+        const ok = !!checks[key];
+        li.classList.toggle('is-ok', ok);
+        const dot = li.querySelector('.proauth-pwd-req-dot');
+        if (dot) dot.textContent = ok ? '✓' : '·';
+      });
+    }
+
+    const pwdAllOk = checks.len && checks.upper && checks.lower && checks.num && checks.sym;
+    const pwdMatch = pwd.length > 0 && pwd === pwd2;
+    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    const nameValid = name.length >= 2;
+    const allValid = nameValid && emailValid && pwdAllOk && pwdMatch && terms;
+
+    if (submitBtn) submitBtn.disabled = !allValid;
+
+    if (errorEl) {
+      if (pwd.length > 0 && pwd2.length > 0 && !pwdMatch) {
+        errorEl.textContent = '⚠️ As senhas digitadas não são iguais.';
+        errorEl.style.display = 'block';
+      } else {
+        errorEl.style.display = 'none';
+        errorEl.textContent = '';
+      }
+    }
+
+    return allValid;
+  }
+
+  static async _proHandleSubmit(e, mode) {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+
+    const submitId = `proauth-${mode}-submit`;
+    const errorId = `proauth-${mode}-error`;
+    const submitBtn = document.getElementById(submitId);
+    const errorEl = document.getElementById(errorId);
+
+    if (submitBtn) { submitBtn.disabled = true; const orig = submitBtn.textContent; submitBtn.dataset.origText = orig; submitBtn.textContent = '⏳ ' + orig; }
+    if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
+
+    try {
+      if (mode === 'login') {
+        const email = (document.getElementById('proauth-login-email')?.value || '').trim();
+        const password = document.getElementById('proauth-login-password')?.value || '';
+        if (!email || !password) {
+          if (errorEl) { errorEl.textContent = '❌ Informe e-mail e senha.'; errorEl.style.display = 'block'; }
+          return false;
+        }
+        const resp = await AuthManager.signInCloud({ email, password });
+        if (resp?.error) {
+          const msg = resp.error.message || 'Credenciais inválidas.';
+          if (errorEl) { errorEl.textContent = '❌ ' + msg; errorEl.style.display = 'block'; }
+          this.showToast('Falha no login: ' + msg);
+          return false;
+        }
+        const userId = AuthManager.getCurrentUserId();
+        const existingProp = StorageManager.getPropertyInfo();
+        if (existingProp && (!existingProp.user_id || existingProp.user_id === 'local-user-admin')) {
+          StorageManager.savePropertyInfo({ user_id: userId }, true);
+        }
+        this.closeModalAuth();
+        this.updateAuthUI();
+        this.showToast('🔓 Autenticado na nuvem com sucesso!');
+        setTimeout(() => SupabaseSync.processQueue(), 500);
+        return true;
+      }
+
+      if (mode === 'signup') {
+        if (!this._proSignupValidate()) {
+          if (errorEl) { errorEl.textContent = '⚠️ Verifique os dados e aceite os Termos de Uso.'; errorEl.style.display = 'block'; }
+          return false;
+        }
+        const name = (document.getElementById('proauth-signup-name')?.value || '').trim();
+        const email = (document.getElementById('proauth-signup-email')?.value || '').trim();
+        const password = document.getElementById('proauth-signup-password')?.value || '';
+        const resp = await AuthManager.signUp(email, password, name);
+        if (resp?.error) {
+          const msg = resp.error.message || 'Erro ao criar conta.';
+          if (errorEl) { errorEl.textContent = '❌ ' + msg; errorEl.style.display = 'block'; }
+          this.showToast('Falha no cadastro: ' + msg);
+          return false;
+        }
+        this.showToast('✅ Conta criada! Verifique seu e-mail para confirmar.');
+        this.closeModalAuth();
+        this.updateAuthUI();
+        setTimeout(() => SupabaseSync.processQueue(), 500);
+        return true;
+      }
+
+      if (mode === 'reset') {
+        const email = (document.getElementById('proauth-reset-email')?.value || '').trim();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          if (errorEl) { errorEl.textContent = '❌ Informe um e-mail válido.'; errorEl.style.display = 'block'; }
+          return false;
+        }
+        const resp = await SupabaseClient.auth.resetPasswordForEmail(email);
+        if (resp?.error) {
+          const msg = resp.error.message || 'Erro ao enviar link.';
+          if (errorEl) { errorEl.textContent = '❌ ' + msg; errorEl.style.display = 'block'; }
+          this.showToast('Falha: ' + msg);
+          return false;
+        }
+        this.showToast('📧 Link de recuperação enviado! Verifique sua caixa de entrada.');
+        this._proAuthSwitchView('login');
+        return true;
+      }
+
+      if (mode === 'local') {
+        const pin = document.getElementById('proauth-local-pin')?.value || '';
+        if (AuthManager.login(pin)) {
+          this.closeModalAuth();
+          this.updateAuthUI();
+          this.showToast('🔓 Autenticado como Administrador com sucesso!');
+          setTimeout(() => SupabaseSync.processQueue(), 500);
+          return true;
+        } else {
+          if (errorEl) { errorEl.textContent = '❌ Senha incorreta! Tente novamente.'; errorEl.style.display = 'block'; }
+          return false;
+        }
+      }
+
+      return false;
+    } catch (err) {
+      if (errorEl) { errorEl.textContent = '❌ ' + (err.message || 'Erro interno.'); errorEl.style.display = 'block'; }
+      console.warn('[ProAuth] Erro:', err);
+      return false;
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        if (submitBtn.dataset.origText) submitBtn.textContent = submitBtn.dataset.origText;
+      }
+    }
+  }
+
+  static async _proGoogle(mode) {
+    try {
+      const resp = await SupabaseClient.auth.signInWithGoogle();
+      if (resp?.error) {
+        this.showToast('⚠️ Login Google temporariamente indisponível: ' + (resp.error.message || ''));
+      }
+    } catch (err) {
+      this.showToast('⚠️ Login Google temporariamente indisponível.');
+    }
   }
 
   static closeModalAuth() {

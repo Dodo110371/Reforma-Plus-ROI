@@ -200,6 +200,31 @@
         return c.auth.signInWithOtp({ email });
       },
 
+      async signInWithGoogle() {
+        const c = _bootClient();
+        if (!c) return { error: new Error('Supabase não inicializado') };
+        const origin = (window.location && window.location.origin) ? window.location.origin.replace(/\/$/, '') : '';
+        try {
+          return await c.auth.signInWithOAuth({
+            provider: 'google',
+            options: { redirectTo: origin + '/' },
+          });
+        } catch (e) {
+          return { error: e };
+        }
+      },
+
+      async resetPasswordForEmail(email) {
+        const c = _bootClient();
+        if (!c) return { error: new Error('Supabase não inicializado') };
+        const origin = (window.location && window.location.origin) ? window.location.origin.replace(/\/$/, '') : '';
+        try {
+          return await c.auth.resetPasswordForEmail(email, { redirectTo: origin + '/' });
+        } catch (e) {
+          return { error: e };
+        }
+      },
+
       async signOut() {
         _clearCloudUserCache();
         const c = _bootClient();
