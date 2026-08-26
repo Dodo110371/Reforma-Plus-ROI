@@ -879,14 +879,20 @@ class AuthManager {
     if (!window.SupabaseClient || !window.SupabaseClient.isEnabled()) {
       return { error: new Error('Supabase não configurado.') };
     }
-    return window.SupabaseClient.auth.signUp({ email, password, fullName });
+    const normEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    const resp = await window.SupabaseClient.auth.signUp({ email: normEmail, password, fullName });
+    if (!resp?.error && resp?.data?.session && resp?.data?.user) {
+      sessionStorage.setItem(SESSION_KEY_IS_AUTH, 'true');
+    }
+    return resp;
   }
 
   static async signInCloud({ email, password }) {
     if (!window.SupabaseClient || !window.SupabaseClient.isEnabled()) {
       return { error: new Error('Supabase não configurado.') };
     }
-    const resp = await window.SupabaseClient.auth.signIn({ email, password });
+    const normEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    const resp = await window.SupabaseClient.auth.signIn({ email: normEmail, password });
     if (!resp?.error && resp?.data?.user) {
       sessionStorage.setItem(SESSION_KEY_IS_AUTH, 'true');
     }

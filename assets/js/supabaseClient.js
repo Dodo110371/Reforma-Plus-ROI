@@ -178,19 +178,28 @@
       async signUp({ email, password, fullName }) {
         const c = _bootClient();
         if (!c) return { error: new Error('Supabase não inicializado') };
+        const normEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
         const resp = await c.auth.signUp({
-          email, password,
-          options: { data: { full_name: fullName || email } },
+          email: normEmail,
+          password,
+          options: { data: { full_name: (fullName || normEmail || '').toString() } },
         });
         if (resp?.data?.user) _cacheCloudUser(resp.data.user);
+        if (resp?.data?.session) {
+          sessionStorage.setItem('supabase.session.bypass', '1');
+        }
         return resp;
       },
 
       async signIn({ email, password }) {
         const c = _bootClient();
         if (!c) return { error: new Error('Supabase não inicializado') };
-        const resp = await c.auth.signInWithPassword({ email, password });
+        const normEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+        const resp = await c.auth.signInWithPassword({ email: normEmail, password });
         if (resp?.data?.user) _cacheCloudUser(resp.data.user);
+        if (resp?.data?.session) {
+          sessionStorage.setItem('supabase.session.bypass', '1');
+        }
         return resp;
       },
 
