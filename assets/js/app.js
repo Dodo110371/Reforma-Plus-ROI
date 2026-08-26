@@ -35,13 +35,16 @@ class AppController {
         window.SupabaseClient.auth.onChange((evt, session) => {
           try {
             if (evt === 'SIGNED_IN' && session?.user) {
+              try { sessionStorage.setItem('reformaplus_is_authenticated', 'true'); } catch (_) { }
               const userId = session.user.id;
               const existingProp = StorageManager.getPropertyInfo();
               if (existingProp && (!existingProp.user_id || existingProp.user_id === 'local-user-admin')) {
                 StorageManager.savePropertyInfo({ user_id: userId }, true);
               }
+            } else if (evt === 'SIGNED_OUT') {
+              try { sessionStorage.setItem('reformaplus_is_authenticated', 'false'); } catch (_) { }
             }
-          } catch (err) { console.warn('[App] onChange auth SIGNED_IN handler error:', err); }
+          } catch (err) { console.warn('[App] onChange auth handler error:', err); }
           try { AppController.updateAuthUI(); } catch (_) { }
           if (evt === 'SIGNED_IN') {
             setTimeout(() => { try { SupabaseSync.processQueue(); } catch (_) { } }, 800);
@@ -951,17 +954,26 @@ class AppController {
         }
         const resp = await AuthManager.signInCloud({ email, password });
         if (resp?.error) {
-          const raw = String((resp.error && resp.error.message) ? resp.error.message : (resp.error.msg || resp.error.code || ''));
-          console.warn('[Auth][Login] Erro Supabase (original):', { err: resp.error, email });
-          let msg = 'E-mail ou senha inválidos. Verifique e tente novamente.';
-          if (/invalid.*credentials|invalid.*password|invalid.*login|email not confirmed|confirm.*email/i.test(raw)) {
-            if (/email not confirmed|confirm.*email/i.test(raw)) {
-              msg = 'E-mail ainda não confirmado. Verifique sua caixa de entrada e clique no link de confirmação.';
-            } else {
-              msg = 'E-mail ou senha inválidos. Verifique e tente novamente.';
-            }
+          const raw = String((resp.error && resp.error.message) ? resp.error.message : (resp.error.msg || resp.error.code || resp.error.error_description || ''));
+          const status = String((resp.error && resp.error.status) || (resp.error && resp.error.code) || '');
+          console.warn('[Auth][Login] Erro Supabase (ORIGINAL):', { err: resp.error, email, status, raw });
+
+          let msg = '';
+          const r = (raw + ' ' + status).toLowerCase();
+          if (/invalid.*credentials|invalid.*password|invalid.*login|wrong.*password|bad.*password/i.test(r)) {
+            msg = 'E-mail ou senha incorretos. Verifique e tente novamente.';
+          } else if (/email.*not.*confirmed|confirm.*email|verify.*email|email_confirmation/i.test(r)) {
+            msg = 'E-mail ainda não confirmado. Clique no link que enviamos para sua caixa de entrada.';
+          } else if (/user.*not.*found|no.*user|could not find user/i.test(r)) {
+            msg = 'Nenhuma conta encontrada com este e-mail. Verifique ou crie uma conta nova.';
+          } else if (/too many|rate limit|exceeded|over quota/i.test(r)) {
+            msg = 'Muitas tentativas. Aguarde uns minutos e tente novamente.';
+          } else if (/network|fetch|connection|offline|timeout/i.test(r)) {
+            msg = 'Sem conexão com a internet. Verifique sua rede e tente novamente.';
           } else if (raw) {
-            msg = msg + ' Detalhe: ' + raw;
+            msg = 'Não foi possível entrar. Detalhe: ' + raw;
+          } else {
+            msg = 'Não foi possível entrar. Verifique os dados e tente novamente.';
           }
           if (errorEl) { errorEl.textContent = '❌ ' + msg; errorEl.style.display = 'block'; }
           this.showToast('Falha no login: ' + msg, 'error', 6000);
@@ -993,38 +1005,60 @@ class AppController {
         try {
           resp = await AuthManager.signUpCloud({ email, password, fullName: name });
         } catch (err) {
-          console.warn('[Auth][SignUp] Exceção (original):', err);
+          console.warn('[Auth][SignUp] Exceção (ORIGINAL):', err);
           resp = { error: err };
         }
 
         if (resp?.error) {
-          const raw = String((resp.error && resp.error.message) ? resp.error.message : (resp.error.msg || resp.error.code || 'Erro ao criar conta.'));
-          console.warn('[Auth][SignUp] Erro Supabase (original):', { err: resp.error, email });
+          const raw = String((resp.error && resp.error.message) ? resp.error.message : (resp.error.msg || resp.error.code || resp.error.error_description || 'Erro ao criar conta.'));
+          const status = String((resp.error && resp.error.status) || (resp.error && resp.error.code) || '');
+          console.warn('[Auth][SignUp] Erro Supabase (ORIGINAL):', { err: resp.error, email, status, raw });
+
           let msg = raw;
-          if (/already registered|already\s+in\s+use|email.*exists|duplicate|23505/i.test(raw)) {
+          const r = (raw + ' ' + status).toLowerCase();
+          if (/already registered|already\s+in\s+use|email.*exists|duplicate|23505|unique_violation/i.test(r)) {
             msg = 'Este e-mail já possui uma conta. Use "Entrar" ou recupere a senha.';
-          } else if (/password.*too short|password.*weak|senha muito|at least.*character|weak_password/i.test(raw)) {
+          } else if (/password.*too short|password.*weak|senha muito|at least.*character|weak_password|min.*length/i.test(r)) {
             msg = 'A senha não atende aos requisitos de segurança do Supabase (mínimo 6 caracteres).';
-          } else if (/disabled|signup|not allowed|signups disabled/i.test(raw)) {
+          } else if (/disabled|signup|not allowed|signups disabled/i.test(r)) {
             msg = 'Cadastros temporariamente indisponíveis. Tente novamente mais tarde.';
-          } else if (/invalid email|email.*invalid/i.test(raw)) {
+          } else if (/invalid email|email.*invalid/i.test(r)) {
             msg = 'Formato de e-mail inválido.';
+          } else if (/network|fetch|connection|offline|timeout/i.test(r)) {
+            msg = 'Sem conexão com a internet. Verifique sua rede e tente novamente.';
           }
           if (errorEl) { errorEl.textContent = '❌ ' + msg; errorEl.style.display = 'block'; }
           this.showToast('Falha no cadastro: ' + msg, 'error', 6000);
           return false;
         }
 
-        const user = resp?.data?.user || resp?.user || null;
-        const session = resp?.data?.session || resp?.session || null;
-        const hasValidSession = !!session && (typeof session === 'object') && !!session.access_token && !!user;
-        const needsEmailConfirm = !hasValidSession
-          && !!user
-          && (user.email_confirmed_at == null)
-          && (user.confirmation_sent_at != null || user.identities && user.identities.length === 0);
+        const data = resp?.data || resp || {};
+        let session = data.session || null;
+        const user = data.user || resp?.user || null;
 
-        if (hasValidSession) {
-          const userId = user?.id ? user.id : AuthManager.getCurrentUserId();
+        // CASO 1: session já retornada pelo Supabase (confirm email OFF — configuração obrigatória do produto)
+        let sessionOk = !!session && typeof session === 'object' && !!session.access_token && !!user;
+
+        // CASO 2: session=null (Supabase ainda tinha confirm email ON, user criado mas não logado)
+        // → tenta signInWithPassword com a senha originalmente digitada (garante entrada imediata)
+        if (!sessionOk && user && password) {
+          try {
+            console.warn('[Auth][SignUp] Session vazia. Tentando login implícito após cadastro...');
+            const loginResp = await AuthManager.signInCloud({ email, password });
+            if (!loginResp?.error) {
+              session = loginResp?.data?.session || loginResp?.session || null;
+              if (session || AuthManager.isAuthenticated()) sessionOk = true;
+            } else {
+              console.warn('[Auth][SignUp] Login implícito falhou:', loginResp?.error);
+            }
+          } catch (e2) {
+            console.warn('[Auth][SignUp] Login implícito exception:', e2);
+          }
+        }
+
+        // APLICA RESULTADO — NUNCA MAIS MANDA PARA TELA ENTRAR APÓS CADASTRO
+        if (sessionOk) {
+          const userId = (user && user.id) ? user.id : AuthManager.getCurrentUserId();
           const existingProp = StorageManager.getPropertyInfo();
           if (existingProp && (!existingProp.user_id || existingProp.user_id === 'local-user-admin') && userId) {
             StorageManager.savePropertyInfo({ user_id: userId }, true);
@@ -1033,25 +1067,16 @@ class AppController {
           this.closeModalAuth();
           this.updateAuthUI();
           setTimeout(() => SupabaseSync.processQueue(), 500);
-        } else if (needsEmailConfirm) {
-          this.showToast('✅ Conta criada! Confirme seu e-mail. Abra sua caixa de entrada e clique no link que enviamos antes de fazer login.', 'success', 12000);
-          this._proAuthReset();
-          this._proAuthSwitchView('login');
-          const emailField = document.getElementById('proauth-login-email');
-          if (emailField) emailField.value = email;
-        } else {
-          if (user) {
-            this.showToast('✅ Conta criada! Verifique sua caixa de entrada (e SPAM) para concluir a ativação.', 'success', 10000);
-            this._proAuthReset();
-            this._proAuthSwitchView('login');
-            const emailField = document.getElementById('proauth-login-email');
-            if (emailField) emailField.value = email;
-          } else {
-            if (errorEl) { errorEl.textContent = '❌ Resposta inválida do servidor. Tente novamente.'; errorEl.style.display = 'block'; }
-            return false;
-          }
+          return true;
         }
-        return true;
+
+        // Chegando aqui = erro interno. Informar e PARAR.
+        if (errorEl) {
+          errorEl.textContent = '❌ Conta criada, mas não foi possível autenticar automaticamente. Tente "Entrar" com o e-mail e senha cadastrados.';
+          errorEl.style.display = 'block';
+        }
+        this.showToast('⚠️ Conta criada! Entre usando e-mail e senha.', 'warning', 8000);
+        return false;
       }
 
       if (mode === 'reset') {
