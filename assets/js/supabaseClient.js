@@ -74,13 +74,45 @@
   function _bootClient() {
     if (state.enabled) return state.client;
     if (LOCAL_ONLY) return null;
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+
+    const urlRaw = (SUPABASE_URL || '').trim();
+    const keyRaw = (SUPABASE_ANON_KEY || '').trim();
+
+    // Validação estrutural — diagnóstico de envs Vercel não carregadas
+    const problems = [];
+    if (!urlRaw) {
+      problems.push('VITE_SUPABASE_URL vazia. Verifique se a variável foi definida no Vercel / env local e se o build gerou env.js corretamente.');
+    } else {
+      if (!/^https?:\/\//i.test(urlRaw)) problems.push('SUPABASE_URL deve começar com https:// ou http:// (localhost). Valor atual: "' + urlRaw + '".');
+      const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)/i.test(urlRaw);
+      const isSupabaseHosted = /^https:\/\/[a-z0-9-]+\.supabase\.(co|in|net)(\/|$)/i.test(urlRaw);
+      if (!isLocalhost && !isSupabaseHosted) {
+        problems.push('SUPABASE_URL parece inválida (não é localhost nem *.supabase.co). Verifique: "' + urlRaw + '". URL esperada: https://<project-ref>.supabase.co');
+      }
+    }
+    if (!keyRaw) {
+      problems.push('VITE_SUPABASE_ANON_KEY vazia. Copie a "anon public" do Painel Supabase → Project Settings → API.');
+    } else if (keyRaw.length < 30) {
+      problems.push('VITE_SUPABASE_ANON_KEY muito curta (' + keyRaw.length + ' chars). Chaves anon públicas do Supabase são JWTs longos (~200 chars). Verifique se não foi commitado um placeholder.');
+    } else if (/SEU|EXEMPLO|EXAMPLE|YOUR|xxxxx|PLACEHOLDER|password|senha/i.test(keyRaw)) {
+      problems.push('VITE_SUPABASE_ANON_KEY parece ser um valor placeholder e não a chave real. Copie do painel Supabase.');
+    }
+    if (problems.length) {
+      console.error('[Supabase] Validação FALHOU. Cliente não inicializado. Problemas:');
+      for (let i = 0; i < problems.length; i++) console.error('   [' + (i + 1) + '/' + problems.length + '] ' + problems[i]);
+      state.enabled = false;
+      state.client = null;
+      state.url = '';
+      state.anonKey = '';
+      return null;
+    }
+
     if (!window.supabase || typeof window.supabase.createClient !== 'function') {
       console.warn('[Supabase] CDN não carregado. Verifique o <script> no head.');
       return null;
     }
     try {
-      state.client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      state.client = window.supabase.createClient(urlRaw, keyRaw, {
         auth: {
           persistSession: true,
           autoRefreshToken: true,
@@ -95,9 +127,9 @@
         },
       });
       state.enabled = true;
-      state.url = SUPABASE_URL;
-      state.anonKey = SUPABASE_ANON_KEY.slice(0, 12) + '...[truncated]';
-      console.info(`[Supabase] Cliente inicializado (${SUPABASE_URL.replace('https://', '')}).`);
+      state.url = urlRaw;
+      state.anonKey = keyRaw.slice(0, 12) + '...[truncated]';
+      console.info('[Supabase] Cliente inicializado (' + urlRaw.replace('https://', '') + '). Validação estrutural OK.');
       return state.client;
     } catch (e) {
       console.error('[Supabase] Falha ao criar cliente:', e);

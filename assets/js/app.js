@@ -926,6 +926,67 @@ class AppController {
     return allValid;
   }
 
+  static _proClassifyNetworkError(rawMsg, err) {
+    const raw = String(rawMsg || '').toLowerCase();
+    const stack = String((err && err.stack) || '').toLowerCase();
+    const combined = raw + ' ' + stack;
+
+    // PRIORIDADE 0: Offline REAL do navegador (somente termos claros, NÃO "NetworkError:" — Chrome prefixa todos os erros fetch com NetworkError)
+    const isTrulyOffline = (typeof navigator !== 'undefined' && navigator.onLine === false);
+    if (
+      isTrulyOffline
+      || /(^|\s|,|\.)offline($|\s|,|\.)/i.test(combined)
+      || /\bno\s+internet\b/i.test(combined)
+      || /\bECONNREFUSED\b|\bENETUNREACH\b|\bENETDOWN\b/i.test(combined)
+      || /\bnetwork\s+error\b/i.test(combined)
+    ) {
+      return {
+        kind: 'offline',
+        label: 'Sem conexão com a internet. Verifique sua rede e tente novamente.',
+      };
+    }
+
+    // PRIORIDADE 1: CORS (antes do fetch genérico, pois erros CORS vem como "Failed to fetch" no Chrome)
+    if (/CORS|cross-origin|Access-Control-Allow-Origin|blocked by CORS|CORS policy/i.test(combined)) {
+      return {
+        kind: 'cors',
+        label: 'Bloqueio de CORS detectado. O domínio atual precisa estar autorizado no painel Supabase → Authentication → URL Configuration (Site URL e Redirect URLs). Detalhe técnico: ' + String(rawMsg || ''),
+      };
+    }
+
+    // PRIORIDADE 2: DNS / Host inacessível (pausado FREE tier / ref errada)
+    if (/ERR_NAME_NOT_RESOLVED|DNS|ENOTFOUND|not resolved|could not resolve host|host not found|dns_error|NS_ERROR_|address not available|ERR_CONNECTION_CLOSED|ERR_TUNNEL_CONNECTION_FAILED/i.test(combined)) {
+      return {
+        kind: 'dns',
+        label: 'Não foi possível conectar ao servidor do Supabase (DNS não resolvido). O projeto provavelmente está PAUSADO no FREE tier (mais de 7 dias sem uso), ou a Project URL na Vercel está incorreta. Abra o Painel Supabase e clique em "Resume Project" se necessário. Detalhe técnico: ' + String(rawMsg || ''),
+      };
+    }
+
+    // PRIORIDADE 3: Timeout
+    if (/timeout|timed out|ETIMEDOUT|request to .+ timed out|deadline exceeded/i.test(combined)) {
+      return {
+        kind: 'timeout',
+        label: 'O servidor do Supabase demorou a responder (timeout). Tente novamente em alguns segundos. Detalhe técnico: ' + String(rawMsg || ''),
+      };
+    }
+
+    // PRIORIDADE 4: Fetch genérico (não caiu nas anteriores)
+    if (/Failed to fetch|load failed|networkerror when attempting to fetch resource|fetch error|abort error|aborted|network request failed/i.test(combined)) {
+      const urlHint = (window.SupabaseClient && typeof window.SupabaseClient.debug === 'function')
+        ? window.SupabaseClient.debug().url
+        : '';
+      let extra = 'Detalhe técnico: ' + String(rawMsg || '');
+      if (urlHint) extra = extra + ' (URL Supabase detectada: ' + urlHint + ').';
+      return {
+        kind: 'fetch',
+        label: 'Não foi possível contatar o servidor do Supabase. Verifique: (1) o projeto Supabase está ativo e não pausado, (2) as variáveis VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY estão preenchidas corretamente no Vercel, (3) não há extensão (VPN, adblocker) bloqueando a conexão, (4) navegador não está bloqueando domínios de terceiros. ' + extra,
+      };
+    }
+
+    // Sem match
+    return { kind: 'other', label: null };
+  }
+
   static async _proHandleSubmit(e, mode) {
     if (e) { e.preventDefault(); e.stopPropagation(); }
 
@@ -959,24 +1020,27 @@ class AppController {
           console.warn('[Auth][Login] Erro Supabase (ORIGINAL):', { err: resp.error, email, status, raw });
 
           let msg = '';
-          const r = (raw + ' ' + status).toLowerCase();
-          if (/invalid.*credentials|invalid.*password|invalid.*login|wrong.*password|bad.*password/i.test(r)) {
-            msg = 'E-mail ou senha incorretos. Verifique e tente novamente.';
-          } else if (/email.*not.*confirmed|confirm.*email|verify.*email|email_confirmation/i.test(r)) {
-            msg = 'E-mail ainda não confirmado. Clique no link que enviamos para sua caixa de entrada.';
-          } else if (/user.*not.*found|no.*user|could not find user/i.test(r)) {
-            msg = 'Nenhuma conta encontrada com este e-mail. Verifique ou crie uma conta nova.';
-          } else if (/too many|rate limit|exceeded|over quota/i.test(r)) {
-            msg = 'Muitas tentativas. Aguarde uns minutos e tente novamente.';
-          } else if (/network|fetch|connection|offline|timeout/i.test(r)) {
-            msg = 'Sem conexão com a internet. Verifique sua rede e tente novamente.';
-          } else if (raw) {
-            msg = 'Não foi possível entrar. Detalhe: ' + raw;
+          const net = this._proClassifyNetworkError(raw, resp.error);
+          if (net.label) {
+            msg = net.label;
           } else {
-            msg = 'Não foi possível entrar. Verifique os dados e tente novamente.';
+            const r = (raw + ' ' + status).toLowerCase();
+            if (/invalid.*credentials|invalid.*password|invalid.*login|wrong.*password|bad.*password/i.test(r)) {
+              msg = 'E-mail ou senha incorretos. Verifique e tente novamente.';
+            } else if (/email.*not.*confirmed|confirm.*email|verify.*email|email_confirmation/i.test(r)) {
+              msg = 'E-mail ainda não confirmado. Clique no link que enviamos para sua caixa de entrada (verifique também a caixa SPAM).';
+            } else if (/user.*not.*found|no.*user|could not find user/i.test(r)) {
+              msg = 'Nenhuma conta encontrada com este e-mail. Verifique ou crie uma conta nova.';
+            } else if (/too many|rate limit|exceeded|over quota/i.test(r)) {
+              msg = 'Muitas tentativas seguidas. Aguarde uns minutos e tente novamente.';
+            } else if (raw) {
+              msg = 'Não foi possível entrar. Detalhe: ' + raw;
+            } else {
+              msg = 'Não foi possível entrar. Verifique os dados e tente novamente.';
+            }
           }
           if (errorEl) { errorEl.textContent = '❌ ' + msg; errorEl.style.display = 'block'; }
-          this.showToast('Falha no login: ' + msg, 'error', 6000);
+          this.showToast('Falha no login: ' + msg, 'error', 9000);
           return false;
         }
         const userId = AuthManager.getCurrentUserId();
@@ -1015,20 +1079,23 @@ class AppController {
           console.warn('[Auth][SignUp] Erro Supabase (ORIGINAL):', { err: resp.error, email, status, raw });
 
           let msg = raw;
-          const r = (raw + ' ' + status).toLowerCase();
-          if (/already registered|already\s+in\s+use|email.*exists|duplicate|23505|unique_violation/i.test(r)) {
-            msg = 'Este e-mail já possui uma conta. Use "Entrar" ou recupere a senha.';
-          } else if (/password.*too short|password.*weak|senha muito|at least.*character|weak_password|min.*length/i.test(r)) {
-            msg = 'A senha não atende aos requisitos de segurança do Supabase (mínimo 6 caracteres).';
-          } else if (/disabled|signup|not allowed|signups disabled/i.test(r)) {
-            msg = 'Cadastros temporariamente indisponíveis. Tente novamente mais tarde.';
-          } else if (/invalid email|email.*invalid/i.test(r)) {
-            msg = 'Formato de e-mail inválido.';
-          } else if (/network|fetch|connection|offline|timeout/i.test(r)) {
-            msg = 'Sem conexão com a internet. Verifique sua rede e tente novamente.';
+          const net = this._proClassifyNetworkError(raw, resp.error);
+          if (net.label) {
+            msg = net.label;
+          } else {
+            const r = (raw + ' ' + status).toLowerCase();
+            if (/already registered|already\s+in\s+use|email.*exists|duplicate|23505|unique_violation/i.test(r)) {
+              msg = 'Este e-mail já possui uma conta. Use "Entrar" ou recupere a senha.';
+            } else if (/password.*too short|password.*weak|senha muito|at least.*character|weak_password|min.*length/i.test(r)) {
+              msg = 'A senha não atende aos requisitos de segurança do Supabase (mínimo 6 caracteres).';
+            } else if (/disabled|signup|not allowed|signups disabled/i.test(r)) {
+              msg = 'Cadastros temporariamente indisponíveis. Tente novamente mais tarde.';
+            } else if (/invalid email|email.*invalid/i.test(r)) {
+              msg = 'Formato de e-mail inválido.';
+            }
           }
           if (errorEl) { errorEl.textContent = '❌ ' + msg; errorEl.style.display = 'block'; }
-          this.showToast('Falha no cadastro: ' + msg, 'error', 6000);
+          this.showToast('Falha no cadastro: ' + msg, 'error', 12000);
           return false;
         }
 
@@ -1087,9 +1154,27 @@ class AppController {
         }
         const resp = await SupabaseClient.auth.resetPasswordForEmail(email);
         if (resp?.error) {
-          const msg = resp.error.message || 'Erro ao enviar link.';
+          const raw = String((resp.error && resp.error.message) ? resp.error.message : (resp.error.msg || resp.error.code || resp.error.error_description || 'Erro ao enviar link.'));
+          const status = String((resp.error && resp.error.status) || (resp.error && resp.error.code) || '');
+          console.warn('[Auth][Reset] Erro Supabase (ORIGINAL):', { err: resp.error, email, status, raw });
+          let msg;
+          const net = this._proClassifyNetworkError(raw, resp.error);
+          if (net.label) {
+            msg = net.label;
+          } else {
+            const r = (raw + ' ' + status).toLowerCase();
+            if (/email.*not.*found|user.*not.*found|no.*user|could not find user/i.test(r)) {
+              msg = 'Não foi possível enviar. Se o e-mail existir, o link foi enviado (verifique também a caixa SPAM).';
+            } else if (/too many|rate limit|exceeded/i.test(r)) {
+              msg = 'Muitas solicitações. Aguarde uns minutos antes de tentar novamente.';
+            } else if (raw) {
+              msg = 'Não foi possível enviar o link. Detalhe técnico: ' + raw;
+            } else {
+              msg = 'Não foi possível enviar o link. Tente novamente.';
+            }
+          }
           if (errorEl) { errorEl.textContent = '❌ ' + msg; errorEl.style.display = 'block'; }
-          this.showToast('Falha: ' + msg);
+          this.showToast('Falha: ' + msg, 'error', 12000);
           return false;
         }
         this.showToast('📧 Link de recuperação enviado! Verifique sua caixa de entrada. Se não chegar, cheque a caixa de SPAM.', 'success', 9000);
