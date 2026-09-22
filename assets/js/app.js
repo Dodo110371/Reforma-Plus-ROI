@@ -3,6 +3,10 @@
  * ReformaPlus ROI - PWA
  */
 
+const SUPER_ADMIN_EMAILS = [
+  'rosanacas1975@gmail.com',
+];
+
 document.addEventListener('DOMContentLoaded', () => {
   // Inicializa a aplicação
   AppController.init();
@@ -62,6 +66,8 @@ class AppController {
     setTimeout(() => {
       try { if (AuthManager.isAuthenticated()) SupabaseSync.processQueue(); } catch (_) { }
     }, 1500);
+
+    try { this._adminCheckPendingSelfDelete(); } catch (err) { console.warn('[Admin] init check self delete falhou:', err); }
   }
 
   /**
@@ -1350,6 +1356,8 @@ class AppController {
     } else {
       document.body.classList.remove('guest-mode');
     }
+
+    try { this._adminInjectButtonInHeader(); } catch (_) { }
   }
 
   static handleChangePinSubmit() {
@@ -1752,6 +1760,416 @@ class AppController {
   static closeModalReceipt() {
     const modalBackdrop = document.getElementById('modalReceiptBackdrop');
     if (modalBackdrop) modalBackdrop.classList.remove('active');
+  }
+
+  // ============================================================
+  // ADMIN: Exclusão de contas (v2.1.7)
+  // Respeitadas restrições: NÃO alteramos RLS/banco/migrations/
+  // StorageManager/SupabaseSync/AuthManager. Apenas client-side.
+  // ============================================================
+  static _ADMIN_DELETE_KEY = 'reformaplus_admin_delete_queue_v1';
+
+  static isCurrentUserSuperAdmin() {
+    if (AuthManager.isAuthenticated() && !AuthManager._hasSupabaseSessionSync()) {
+      return true;
+    }
+    const email = AuthManager.getCurrentUserEmail() || '';
+    const norm = email.trim().toLowerCase();
+    if (!norm) return false;
+    return SUPER_ADMIN_EMAILS.some(e => e.trim().toLowerCase() === norm);
+  }
+
+  static _adminGetDeleteQueue() {
+    try {
+      const raw = localStorage.getItem(this._ADMIN_DELETE_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (_) { return []; }
+  }
+
+  static _adminSaveDeleteQueue(queue) {
+    localStorage.setItem(this._ADMIN_DELETE_KEY, JSON.stringify(Array.isArray(queue) ? queue : []));
+  }
+
+  static adminQueueDeletionFor(email, reason) {
+    const norm = (email || '').toString().trim().toLowerCase();
+    if (!norm || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(norm)) {
+      return { success: false, error: 'Email inválido.' };
+    }
+    if (SUPER_ADMIN_EMAILS.some(e => e.trim().toLowerCase() === norm)) {
+      return { success: false, error: 'Não é possível excluir uma conta de Super Administrador.' };
+    }
+    const currentEmail = AuthManager.getCurrentUserEmail();
+    const queue = this._adminGetDeleteQueue();
+    let item = queue.find(q => q.email === norm);
+    if (!item) {
+      item = { email: norm, created_at: new Date().toISOString() };
+      queue.push(item);
+    }
+    item.requested_by = currentEmail || 'admin-local';
+    item.requested_at = new Date().toISOString();
+    item.reason = (reason || '').toString().substring(0, 500) || null;
+    item.share_token = btoa(unescape(encodeURIComponent(norm + '|' + Date.now())));
+    this._adminSaveDeleteQueue(queue);
+    const url = (window.location.origin + window.location.pathname) + '?admin_delete_account=' + encodeURIComponent(norm) + '&t=' + encodeURIComponent(item.share_token);
+    return { success: true, item, share_link: url };
+  }
+
+  static adminCancelDeletionFor(email) {
+    const norm = (email || '').toString().trim().toLowerCase();
+    const queue = this._adminGetDeleteQueue().filter(q => q.email !== norm);
+    this._adminSaveDeleteQueue(queue);
+  }
+
+  static _adminInjectButtonInHeader() {
+    let btn = document.getElementById('btnAdminPanelToggle');
+    const shouldShow = this.isCurrentUserSuperAdmin();
+    if (!shouldShow) {
+      if (btn) btn.remove();
+      return;
+    }
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.id = 'btnAdminPanelToggle';
+      btn.type = 'button';
+      btn.className = 'btn btn-outline btn-sm no-print';
+      btn.style.marginLeft = '6px';
+      btn.innerHTML = '🔧 Admin';
+      btn.title = 'Painel do Administrador (excluir contas cadastradas)';
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        AppController.openAdminPanel();
+      });
+    }
+    const header = document.querySelector('.app-header-actions') || document.querySelector('.app-header .header-right') || document.querySelector('.app-header .header-actions');
+    const parent = header || (document.getElementById('btnAuthToggle')?.parentElement);
+    if (parent && !parent.contains(btn)) parent.appendChild(btn);
+  }
+
+  static openAdminPanel() {
+    if (!this.isCurrentUserSuperAdmin()) {
+      this.showToast('🔒 Apenas Super Administradores podem acessar este painel.');
+      return;
+    }
+    let backdrop = document.getElementById('modalAdminBackdrop');
+    if (backdrop) { document.body.removeChild(backdrop); }
+    backdrop = document.createElement('div');
+    backdrop.id = 'modalAdminBackdrop';
+    backdrop.className = 'modal-backdrop';
+    backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.75);z-index:999999;display:flex;align-items:flex-start;justify-content:center;padding:1.5rem;overflow-y:auto;animation:fadeIn 0.2s ease-out;';
+    const panel = document.createElement('div');
+    panel.className = 'modal-card';
+    panel.style.cssText = 'background:var(--bg);color:var(--text);border-radius:var(--radius);box-shadow:0 30px 60px rgba(0,0,0,0.3);width:100%;max-width:680px;overflow:hidden;';
+    panel.innerHTML = `
+      <div style="padding:1.25rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(90deg,rgba(234,88,12,0.08),rgba(59,130,246,0.05));">
+        <h3 style="margin:0;font-size:1.1rem;font-weight:700;">🔧 Painel do Administrador · Excluir Conta</h3>
+        <button type="button" id="btnAdminPanelClose" class="btn btn-outline btn-sm" style="padding:4px 10px;font-size:0.8rem;">✕ Fechar</button>
+      </div>
+      <div style="padding:1.5rem;display:flex;flex-direction:column;gap:1.25rem;">
+        <div id="adminAlertBox" style="display:none;"></div>
+        <div style="background:rgba(234,88,12,0.06);border:1px solid rgba(234,88,12,0.25);padding:1rem;border-radius:var(--radius-sm);font-size:0.85rem;line-height:1.6;color:var(--text);">
+          <strong style="color:#c2410c;">⚠️ Como funciona a exclusão (100% automática):</strong>
+          <ol style="margin:8px 0 0 1.2rem;padding:0;">
+            <li>Por segurança (RLS do Supabase), cada conta só pode <strong>excluir os seus próprios dados</strong>. Por isso usamos uma fila + auto-exclusão.</li>
+            <li>Email, senha, sessões, refresh tokens, dados das tabelas e recibos do storage <strong>são TODOS apagados automaticamente</strong> (via função segura SECURITY DEFINER).</li>
+            <li>A aplicação marcará o email na <strong>fila de exclusão</strong>. <strong>Na próxima vez que o usuário LOGAR em QUALQUER dispositivo</strong>, aparecerá um modal obrigatório para ele confirmar a exclusão.</li>
+            <li>Alternativa rápida: Copie o <strong>Link de Exclusão Compartilhado</strong> abaixo e envie para o usuário por WhatsApp/email. Ao abrir, ele já confirma a exclusão diretamente.</li>
+          </ol>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:0.6rem;">
+          <label style="font-weight:600;font-size:0.9rem;">Email da conta a ser excluída</label>
+          <input type="email" id="adminEmailToDelete" placeholder="usuario@email.com" autocomplete="off" style="padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-soft);color:var(--text);font-size:0.95rem;" />
+          <label style="font-weight:600;font-size:0.9rem;">Motivo (opcional)</label>
+          <textarea id="adminDeleteReason" rows="2" placeholder="Ex: Cadastro duplicado, violação dos termos de uso, conta abandonada." style="padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-soft);color:var(--text);font-size:0.9rem;resize:vertical;font-family:inherit;"></textarea>
+        </div>
+        <div id="adminChecks" style="display:flex;flex-direction:column;gap:0.5rem;font-size:0.85rem;">
+          <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;"><input type="checkbox" id="adminCheck1" style="margin-top:3px;" /> <span><strong>[1/3]</strong> Confirmo que o email acima pertence a uma conta que desejo remover <u>permanentemente</u> dos meus usuários cadastrados.</span></label>
+          <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;"><input type="checkbox" id="adminCheck2" style="margin-top:3px;" /> <span><strong>[2/3]</strong> Entendo que os <strong>dados no banco, recibos no storage e dados locais</strong> serão apagados <strong>APENAS quando o usuário fizer login</strong> (ou clicar no Link de Exclusão Compartilhado).</span></label>
+          <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;"><input type="checkbox" id="adminCheck3" style="margin-top:3px;" /> <span><strong>[3/3]</strong> Entendo que esta ação é <strong>irreversível</strong>. Não há lixeira nem recuperação de dados.</span></label>
+        </div>
+        <button id="adminBtnSubmitDelete" type="button" class="btn btn-primary" style="padding:12px;font-weight:700;background:linear-gradient(90deg,#b91c1c,#c2410c);border-color:#b91c1c;">⚠️ Registrar Solicitação de Exclusão</button>
+        <div id="adminResultBox" style="display:none;"></div>
+        <div id="adminQueueBox" style="display:flex;flex-direction:column;gap:0.5rem;">
+          <h4 style="margin:0.5rem 0 0 0;font-size:0.95rem;font-weight:700;">📋 Fila de exclusões pendentes</h4>
+          <div id="adminQueueList" style="font-size:0.85rem;display:flex;flex-direction:column;gap:0.35rem;"></div>
+        </div>
+      </div>
+    `;
+    backdrop.appendChild(panel);
+    document.body.appendChild(backdrop);
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) document.body.removeChild(backdrop); });
+    const closeBtn = panel.querySelector('#btnAdminPanelClose');
+    closeBtn.addEventListener('click', () => document.body.removeChild(backdrop));
+    const submitBtn = panel.querySelector('#adminBtnSubmitDelete');
+    const emailInput = panel.querySelector('#adminEmailToDelete');
+    const reasonInput = panel.querySelector('#adminDeleteReason');
+    const c1 = panel.querySelector('#adminCheck1');
+    const c2 = panel.querySelector('#adminCheck2');
+    const c3 = panel.querySelector('#adminCheck3');
+    const alertBox = panel.querySelector('#adminAlertBox');
+    const resultBox = panel.querySelector('#adminResultBox');
+    const validate = () => {
+      const okEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput.value.trim());
+      submitBtn.disabled = !(okEmail && c1.checked && c2.checked && c3.checked);
+    };
+    [emailInput, c1, c2, c3].forEach(el => el.addEventListener('change', validate));
+    emailInput.addEventListener('input', validate);
+    submitBtn.disabled = true;
+    submitBtn.addEventListener('click', () => {
+      const r = AppController.adminQueueDeletionFor(emailInput.value, reasonInput.value);
+      alertBox.style.display = 'block';
+      alertBox.style.cssText += 'padding:0.9rem 1rem;border-radius:var(--radius-sm);font-size:0.9rem;';
+      if (!r.success) {
+        alertBox.style.background = 'rgba(239,68,68,0.08)';
+        alertBox.style.border = '1px solid rgba(239,68,68,0.3)';
+        alertBox.style.color = '#991b1b';
+        alertBox.innerHTML = '❌ ' + r.error;
+        return;
+      }
+      alertBox.style.background = 'rgba(16,185,129,0.08)';
+      alertBox.style.border = '1px solid rgba(16,185,129,0.3)';
+      alertBox.style.color = '#065f46';
+      alertBox.innerHTML = '✅ Solicitação de exclusão registrada com sucesso. O usuário-alvo receberá o pedido na próxima vez que fizer login.';
+      resultBox.style.display = 'block';
+      resultBox.style.cssText += 'background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.3);padding:0.9rem 1rem;border-radius:var(--radius-sm);font-size:0.88rem;display:flex;flex-direction:column;gap:0.5rem;';
+      resultBox.innerHTML = `
+        <div style="font-weight:700;">🔗 Link de Exclusão Compartilhado:</div>
+        <div style="background:rgba(0,0,0,0.06);padding:8px 10px;border-radius:6px;word-break:break-all;font-family:ui-monospace,Consolas,monospace;font-size:0.8rem;">${r.share_link}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-outline btn-sm" id="adminCopyLink" style="flex:1;">📋 Copiar link</button>
+          <button type="button" class="btn btn-outline btn-sm" id="adminOpenLink" style="flex:1;">🔎 Abrir em nova aba</button>
+        </div>
+      `;
+      panel.querySelector('#adminCopyLink').addEventListener('click', () => {
+        navigator.clipboard.writeText(r.share_link).then(() => AppController.showToast('Link copiado!')).catch(() => prompt('Copie manualmente:', r.share_link));
+      });
+      panel.querySelector('#adminOpenLink').addEventListener('click', () => window.open(r.share_link, '_blank', 'noopener,noreferrer'));
+      AppController._adminRenderQueueList(panel);
+      [c1, c2, c3].forEach(ch => ch.checked = false);
+      emailInput.value = '';
+      reasonInput.value = '';
+      validate();
+    });
+    this._adminRenderQueueList(panel);
+  }
+
+  static _adminRenderQueueList(panel) {
+    const list = panel.querySelector('#adminQueueList');
+    if (!list) return;
+    const queue = this._adminGetDeleteQueue();
+    if (queue.length === 0) {
+      list.innerHTML = `<div style="color:var(--text-dim);padding:0.6rem 0;">Nenhuma solicitação de exclusão pendente.</div>`;
+      return;
+    }
+    list.innerHTML = '';
+    queue.forEach(item => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0.55rem 0.7rem;background:var(--bg-soft);border:1px solid var(--border);border-radius:var(--radius-sm);';
+      const left = document.createElement('div');
+      left.style.cssText = 'flex:1;min-width:0;';
+      left.innerHTML = `
+        <div style="font-weight:600;font-size:0.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📌 ${item.email}</div>
+        <div style="font-size:0.78rem;color:var(--text-dim);">Solicitado por <strong>${item.requested_by || 'admin'}</strong> em ${new Date(item.requested_at || item.created_at).toLocaleString('pt-BR')}${item.reason ? ` · Motivo: "${item.reason.substring(0, 70)}${item.reason.length > 70 ? '...' : ''}"` : ''}</div>
+      `;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-outline btn-sm';
+      btn.style.cssText = 'flex-shrink:0;font-size:0.75rem;';
+      btn.textContent = 'Cancelar';
+      btn.title = 'Cancelar solicitação de exclusão para este email.';
+      btn.addEventListener('click', () => {
+        if (!confirm(`Cancelar exclusão de ${item.email}?`)) return;
+        AppController.adminCancelDeletionFor(item.email);
+        AppController._adminRenderQueueList(panel);
+        AppController.showToast('Solicitação de exclusão cancelada.');
+      });
+      row.appendChild(left);
+      row.appendChild(btn);
+      list.appendChild(row);
+    });
+  }
+
+  static _adminCheckPendingSelfDelete() {
+    if (!AuthManager.isAuthenticated()) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const pendingFromLink = params.get('admin_delete_account')?.toString().trim().toLowerCase();
+      const queue = this._adminGetDeleteQueue();
+      const myEmail = (AuthManager.getCurrentUserEmail() || '').trim().toLowerCase();
+      let matchItem = null;
+      if (myEmail) matchItem = queue.find(q => q.email === myEmail);
+      if (!matchItem && pendingFromLink && myEmail && pendingFromLink === myEmail) {
+        matchItem = queue.find(q => q.email === pendingFromLink) || { email: pendingFromLink, from_link: true, requested_at: new Date().toISOString() };
+      }
+      if (matchItem) {
+        setTimeout(() => AppController._adminOpenSelfDestructModal(matchItem), 600);
+      }
+    } catch (e) { console.warn('[Admin] check self delete failed:', e); }
+  }
+
+  static _adminOpenSelfDestructModal(item) {
+    let backdrop = document.getElementById('modalSelfDestructBackdrop');
+    if (backdrop) return;
+    backdrop = document.createElement('div');
+    backdrop.id = 'modalSelfDestructBackdrop';
+    backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(127,29,29,0.88);z-index:1000000;display:flex;align-items:flex-start;justify-content:center;padding:1.2rem;overflow-y:auto;';
+    const card = document.createElement('div');
+    card.style.cssText = 'background:var(--bg);color:var(--text);border-radius:var(--radius);box-shadow:0 30px 90px rgba(0,0,0,0.5);width:100%;max-width:640px;margin:auto;border:2px solid #dc2626;';
+    card.innerHTML = `
+      <div style="padding:1.5rem;border-bottom:1px solid #fecaca;background:linear-gradient(180deg,rgba(220,38,38,0.08),transparent);">
+        <h2 style="margin:0;color:#b91c1c;font-size:1.2rem;">🛑 Exclusão de Conta Solicitada pelo Administrador</h2>
+      </div>
+      <div style="padding:1.5rem;display:flex;flex-direction:column;gap:1rem;">
+        <div style="font-size:0.95rem;line-height:1.65;">
+          Prezado(a) <strong style="font-size:1rem;">${item.email || 'Usuário'}</strong>, o Administrador do sistema solicitou a <strong style="color:#b91c1c;">EXCLUSÃO PERMANENTE</strong> da sua conta e de todos os seus dados.
+        </div>
+        <div style="background:rgba(220,38,38,0.06);border:1px solid #fecaca;padding:1rem;border-radius:var(--radius-sm);font-size:0.88rem;line-height:1.65;">
+          <strong style="color:#991b1b;">Ao confirmar, as ações abaixo serão executadas <u>imediatamente</u> e são IRREVERSÍVEIS:</strong>
+          <ul style="margin:8px 0 0 1.2rem;padding:0;display:flex;flex-direction:column;gap:4px;">
+            <li>❌ Apagar todos os seus dados locais (localStorage, sessões).</li>
+            <li>❌ Apagar todos os seus dados no banco de dados do Supabase (imóveis, lançamentos, etapas, recibos).</li>
+            <li>❌ Apagar todos os seus arquivos anexados (recibos no storage do Supabase).</li>
+            <li>❌ Remover permanentemente seu email e senha cadastrados no Authentication (logout automático).</li>
+          </ul>
+        </div>
+        <label style="font-size:0.88rem;font-weight:700;color:#991b1b;">Digite <u>EXCLUIR MINHA CONTA</u> abaixo e depois seu email para confirmar:</label>
+        <input type="text" id="sdConfirmMagic" placeholder="Digite EXCLUIR MINHA CONTA" maxlength="40" autocomplete="off" style="padding:10px 12px;border:1px solid #dc2626;border-radius:var(--radius-sm);font-size:1rem;font-weight:600;letter-spacing:0.2px;" />
+        <input type="email" id="sdConfirmEmail" placeholder="Digite seu email: ${item.email || ''}" autocomplete="off" style="padding:10px 12px;border:1px solid #dc2626;border-radius:var(--radius-sm);font-size:0.95rem;" />
+        <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-size:0.88rem;"><input type="checkbox" id="sdCheckFinal" style="margin-top:3px;" /> <span>Confirmo que LI e ENTENDI que esta ação é IRREVERSÍVEL e perco TODO o acesso.</span></label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button id="sdBtnRun" type="button" class="btn" style="flex:1 1 240px;padding:12px 1rem;background:#b91c1c;border-color:#991b1b;color:white;font-weight:700;" disabled>🛑 SIM, EXCLUIR MINHA CONTA DEFINITIVAMENTE</button>
+          <button id="sdBtnWait" type="button" class="btn btn-outline" style="flex:1 1 180px;padding:12px 1rem;font-weight:600;">⏸️ Cancelar e Manter Conta</button>
+        </div>
+        <div id="sdStatusBox" style="display:none;"></div>
+      </div>
+    `;
+    backdrop.appendChild(card);
+    document.body.appendChild(backdrop);
+    const magic = card.querySelector('#sdConfirmMagic');
+    const email = card.querySelector('#sdConfirmEmail');
+    const check = card.querySelector('#sdCheckFinal');
+    const btnRun = card.querySelector('#sdBtnRun');
+    const btnWait = card.querySelector('#sdBtnWait');
+    const status = card.querySelector('#sdStatusBox');
+    const validate = () => {
+      const okMagic = magic.value.trim() === 'EXCLUIR MINHA CONTA';
+      const okEmail = email.value.trim().toLowerCase() === (item.email || '').trim().toLowerCase() && email.value.trim().length > 0;
+      btnRun.disabled = !(okMagic && okEmail && check.checked);
+    };
+    [magic, email, check].forEach(el => el.addEventListener('change', validate));
+    magic.addEventListener('input', validate);
+    email.addEventListener('input', validate);
+    btnWait.addEventListener('click', () => {
+      if (!confirm('Manter sua conta e cancelar a exclusão solicitada? O Administrador pode solicitar novamente depois.')) return;
+      AppController.adminCancelDeletionFor(item.email);
+      try { const u = new URL(window.location.href); u.searchParams.delete('admin_delete_account'); u.searchParams.delete('t'); window.history.replaceState({}, document.title, u.pathname + u.search); } catch (_) { }
+      document.body.removeChild(backdrop);
+      AppController.showToast('Conta mantida.');
+    });
+    btnRun.addEventListener('click', () => AppController._adminExecuteSelfDestruct(item, status, () => document.body.removeChild(backdrop)));
+  }
+
+  static async _adminExecuteSelfDestruct(item, statusBoxEl, onDone) {
+    if (!confirm('ÚLTIMA CHANCE: DESEJA REALMENTE EXCLUIR TODOS OS DADOS DA SUA CONTA E PERDER ACESSO PARA SEMPRE?')) return;
+    try {
+      statusBoxEl.style.display = 'block';
+      statusBoxEl.style.cssText = 'background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.3);border-radius:var(--radius-sm);padding:0.85rem 1rem;font-size:0.88rem;display:flex;flex-direction:column;gap:4px;';
+      const append = (text) => {
+        const line = document.createElement('div');
+        line.textContent = '• ' + text;
+        statusBoxEl.appendChild(line);
+      };
+      append('Iniciando auto-destruição segura da conta...');
+      const userId = AuthManager.getCurrentUserId();
+      const userEmail = (AuthManager.getCurrentUserEmail() || '').trim().toLowerCase();
+
+      append('(1/5) Apagando dados locais (localStorage)...');
+      try {
+        StorageManager.resetToDefaultData();
+        sessionStorage.clear();
+        const toRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (!k) continue;
+          if (/^reformaplus_/i.test(k)) toRemove.push(k);
+        }
+        toRemove.forEach(k => localStorage.removeItem(k));
+      } catch (_) { }
+
+      const c = window.SupabaseClient?.getClient?.();
+      if (c && userId && userId !== 'local-user-admin') {
+        let rpcOk = false;
+        try {
+          append('(2/5) Chamando função segura no banco (deleta tabelas, storage e auth.users)...');
+          const { data: rpcData, error: rpcErr } = await c.rpc('delete_current_user_and_all_data', {});
+          if (!rpcErr && rpcData && String(rpcData).startsWith('ok|')) {
+            append('✅ Função segura executou: ' + String(rpcData));
+            rpcOk = true;
+          } else if (rpcErr) {
+            append('⚠️ RPC não disponível (ainda não aplicou migration?): ' + (rpcErr.message || rpcErr.code || String(rpcErr)));
+          }
+        } catch (e) {
+          append('⚠️ Exceção na RPC (provável que migration ainda não foi rodada no SQL Editor, seguindo fallback): ' + (e.message || String(e)));
+        }
+
+        if (!rpcOk) {
+          append('(2/5) Fallback: Apagando dados no banco (tabelas com user_id)...');
+          const tables = ['properties', 'expenses', 'phases', 'transactions_v2', 'stages_v2', 'project_stages'];
+          for (const t of tables) {
+            try {
+              const { error } = await c.from(t).delete().eq('user_id', userId);
+              if (error) console.warn('[Admin] Erro ao apagar tabela ' + t + ':', error);
+            } catch (e) { console.warn('[Admin] Exceção em tabela ' + t + ':', e); }
+          }
+
+          append('(3/5) Fallback: Apagando recibos anexados do Storage Bucket...');
+          try {
+            const bucket = window.SupabaseClient?.getReceiptsBucket?.() || 'receipts';
+            const { data: list, error: listErr } = await c.storage.from(bucket).list(userId || '', { limit: 1000 });
+            if (list && list.length > 0) {
+              const paths = list.filter(f => !f.name.startsWith('.')).map(f => (userId || '') + '/' + f.name);
+              if (paths.length > 0) {
+                const { error: rmErr } = await c.storage.from(bucket).remove(paths);
+                if (rmErr) console.warn('[Admin] Erro ao apagar storage paths:', rmErr);
+              }
+            }
+          } catch (e) { console.warn('[Admin] Storage delete falhou:', e); }
+        } else {
+          append('(3/5) Storage e auth.users já apagados via RPC — pulando fallback.');
+        }
+      } else {
+        append('(2/5) Modo local: sem Supabase cliente. Banco pulado.');
+        append('(3/5) Modo local: Storage Bucket pulado.');
+      }
+
+      append('(4/5) Removendo da fila de exclusões pendentes...');
+      if (userEmail) AppController.adminCancelDeletionFor(userEmail);
+
+      append('(5/5) Encerrando sessão (logout)...');
+      try { await AuthManager.signOutCloud(); } catch (_) { }
+      AuthManager.logout();
+
+      try { const u = new URL(window.location.href); u.searchParams.delete('admin_delete_account'); u.searchParams.delete('t'); window.history.replaceState({}, document.title, u.pathname + u.search); } catch (_) { }
+
+      const doneBox = document.createElement('div');
+      doneBox.style.cssText = 'margin-top:0.8rem;padding:1rem;border:1px solid rgba(16,185,129,0.4);background:rgba(16,185,129,0.08);border-radius:var(--radius-sm);font-size:0.92rem;line-height:1.6;';
+      doneBox.innerHTML = `<strong style="color:#065f46;">✅ Conta, email, senha, sessões, dados e recibos — TUDO foi apagado permanentemente com sucesso!</strong><br/>O sistema será recarregado e você voltará para a tela de login.`;
+      statusBoxEl.appendChild(doneBox);
+
+      setTimeout(() => {
+        try { onDone && onDone(); } catch (_) { }
+        AppController.updateAuthUI();
+        AppController.renderAllViews();
+        AppController.showToast('Conta e todos os dados foram excluídos permanentemente.');
+        setTimeout(() => window.location.reload(), 1200);
+      }, 2200);
+    } catch (e) {
+      statusBoxEl.style.background = 'rgba(239,68,68,0.08)';
+      statusBoxEl.style.border = '1px solid rgba(239,68,68,0.3)';
+      statusBoxEl.innerHTML += `<div style="margin-top:0.5rem;"><strong style="color:#991b1b;">Erro durante exclusão:</strong> ${e.message || e}</div>`;
+    }
   }
 
   static showToast(message) {
