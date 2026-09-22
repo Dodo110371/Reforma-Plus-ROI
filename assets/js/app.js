@@ -1384,20 +1384,115 @@ class AppController {
   }
 
   static handleChangePinSubmit() {
-    if (!AuthManager.isAuthenticated()) {
-      this.openModalAuth();
-      return;
-    }
-
-    const currentPin = document.getElementById('currentPinInput')?.value;
-    const newPin = document.getElementById('newPinInput')?.value;
-
-    const result = AuthManager.changePin(currentPin, newPin);
-    if (result.success) {
-      document.getElementById('changePinForm')?.reset();
-      this.showToast(result.message);
-    } else {
-      alert(result.message);
+    try {
+      if (!AuthManager.isAuthenticated()) {
+        this.openModalAuth();
+        return;
+      }
+      if (!AppController._adminSyncIsSuperAdminCache) {
+        alert('Apenas administradores do sistema podem alterar o PIN Admin.');
+        return;
+      }
+      // Fecha qualquer submenu dropdown ativo
+      try {
+        const openMenu = document.getElementById('adminDropdownMenu');
+        if (openMenu) openMenu.style.display = 'none';
+      } catch (_) { }
+      let backdrop = document.getElementById('modalAdminPinBackdrop');
+      if (backdrop) document.body.removeChild(backdrop);
+      backdrop = document.createElement('div');
+      backdrop.id = 'modalAdminPinBackdrop';
+      backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.75);z-index:999998;display:flex;align-items:flex-start;justify-content:center;padding:1.5rem;overflow-y:auto;';
+      const card = document.createElement('div');
+      card.style.cssText = 'background:#fff;color:#0f172a;border-radius:14px;box-shadow:0 30px 60px rgba(0,0,0,0.3);width:100%;max-width:480px;overflow:hidden;margin-top:3vh;';
+      card.innerHTML = `
+        <div style="padding:1rem 1.25rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(90deg,rgba(234,88,12,0.10),rgba(59,130,246,0.06));">
+          <h3 style="margin:0;font-size:1.05rem;font-weight:700;color:#0f172a;">🔑 Alterar PIN Administrador</h3>
+          <button type="button" id="admPinClose" class="btn btn-outline btn-sm" style="padding:4px 10px;font-size:0.8rem;background:#fff;border:1px solid #cbd5e1;color:#334155;">✕ Fechar</button>
+        </div>
+        <div style="padding:1.25rem;display:flex;flex-direction:column;gap:0.9rem;">
+          <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.3);padding:0.8rem 0.9rem;border-radius:10px;font-size:0.85rem;line-height:1.55;color:#1e3a8a;">
+            <strong>ℹ️ Sobre o PIN Administrador:</strong>
+            <br/>• PIN padrão fábrica: <strong>1234</strong> (usado se você nunca alterou).
+            <br/>• Este PIN serve para entrar como Administrador mesmo <u>sem internet</u> (modo offline).
+            <br/>• Use no mínimo 4 caracteres (números ou letras).
+          </div>
+          <div style="display:flex;flex-direction:column;gap:0.35rem;">
+            <label style="font-weight:600;font-size:0.9rem;color:#0f172a;">PIN atual</label>
+            <input id="admPinCur" type="password" inputmode="numeric" autocomplete="off" placeholder="Ex.: 1234 (padrão fábrica)" style="padding:10px 12px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#0f172a;font-size:1rem;font-family:inherit;"/>
+            <div style="display:flex;justify-content:flex-end;margin-top:2px;">
+              <button type="button" id="admBtnForgot" class="btn btn-outline btn-sm" style="padding:4px 10px;font-size:0.78rem;background:#fff;border:1px solid #fecaca;color:#991b1b;">❌ Não lembro o PIN atual (resetar)</button>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:0.35rem;">
+            <label style="font-weight:600;font-size:0.9rem;color:#0f172a;">Novo PIN (mín. 4 caracteres)</label>
+            <input id="admPinNew1" type="password" inputmode="numeric" autocomplete="new-password" placeholder="Digite o novo PIN" style="padding:10px 12px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#0f172a;font-size:1rem;font-family:inherit;"/>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:0.35rem;">
+            <label style="font-weight:600;font-size:0.9rem;color:#0f172a;">Confirmar novo PIN</label>
+            <input id="admPinNew2" type="password" inputmode="numeric" autocomplete="new-password" placeholder="Repita o novo PIN" style="padding:10px 12px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#0f172a;font-size:1rem;font-family:inherit;"/>
+          </div>
+          <div id="admPinMsg" style="display:none;padding:0.75rem 0.9rem;border-radius:10px;font-size:0.88rem;line-height:1.5;"></div>
+          <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:0.25rem;">
+            <button id="admBtnCancel" type="button" class="btn btn-outline btn-sm" style="padding:8px 14px;background:#fff;border:1px solid #cbd5e1;color:#334155;">Cancelar</button>
+            <button id="admBtnSave" type="button" class="btn btn-primary btn-sm" style="padding:8px 16px;font-weight:700;background:#c2410c;border-color:#c2410c;">💾 Salvar novo PIN</button>
+          </div>
+        </div>
+      `;
+      backdrop.appendChild(card);
+      document.body.appendChild(backdrop);
+      backdrop.addEventListener('click', e => { if (e.target === backdrop) document.body.removeChild(backdrop); });
+      card.querySelector('#admPinClose').addEventListener('click', () => document.body.removeChild(backdrop));
+      card.querySelector('#admBtnCancel').addEventListener('click', () => document.body.removeChild(backdrop));
+      const showMsg = (ok, text) => {
+        const el = card.querySelector('#admPinMsg');
+        el.style.display = 'block';
+        if (ok) {
+          el.style.background = 'rgba(16,185,129,0.10)';
+          el.style.border = '1px solid rgba(16,185,129,0.35)';
+          el.style.color = '#065f46';
+        } else {
+          el.style.background = 'rgba(239,68,68,0.08)';
+          el.style.border = '1px solid rgba(239,68,68,0.35)';
+          el.style.color = '#991b1b';
+        }
+        el.innerHTML = (ok ? '✅ ' : '❌ ') + text;
+      };
+      const save = () => {
+        try {
+          const cur = card.querySelector('#admPinCur').value;
+          const n1 = card.querySelector('#admPinNew1').value;
+          const n2 = card.querySelector('#admPinNew2').value;
+          if (!n1 || !n2) { showMsg(false, 'Preencha o novo PIN e a confirmação.'); return; }
+          if (String(n1).trim().length < 4) { showMsg(false, 'Novo PIN deve ter no mínimo 4 caracteres.'); return; }
+          if (String(n1).trim() !== String(n2).trim()) { showMsg(false, 'Novo PIN e confirmação não batem.'); return; }
+          const res = AuthManager.changePin(cur, n1);
+          if (!res.success) {
+            showMsg(false, res.message + ' Se não lembra, use o botão vermelho acima "❌ Não lembro o PIN atual (resetar)".');
+            return;
+          }
+          card.querySelector('#admPinCur').value = '';
+          card.querySelector('#admPinNew1').value = '';
+          card.querySelector('#admPinNew2').value = '';
+          showMsg(true, 'PIN Administrador alterado com sucesso! Anote em local seguro: ' + String(n1).trim());
+          setTimeout(() => { try { document.body.removeChild(backdrop); } catch (_) { } AppController.showToast('PIN alterado com sucesso.'); }, 1600);
+        } catch (e) { showMsg(false, String(e && e.message || e)); }
+      };
+      card.querySelector('#admBtnSave').addEventListener('click', save);
+      ['admPinCur', 'admPinNew1', 'admPinNew2'].forEach(id => {
+        card.querySelector('#' + id).addEventListener('keydown', e => { if (e.key === 'Enter') save(); });
+      });
+      card.querySelector('#admBtnForgot').addEventListener('click', () => {
+        try {
+          if (!confirm('Resetar PIN Administrador de volta para o padrão fábrica 1234? (Você pode depois alterar para o que quiser).')) return;
+          localStorage.setItem('reformaplus_auth_pin', '1234');
+          card.querySelector('#admPinCur').value = '1234';
+          showMsg(true, 'PIN resetado com sucesso! Preenchido automaticamente como 1234 no campo "PIN atual". Agora defina seu novo PIN abaixo.');
+        } catch (e) { showMsg(false, String(e && e.message || e)); }
+      });
+      setTimeout(() => { try { card.querySelector('#admPinCur').focus(); } catch (_) { } }, 50);
+    } catch (e) {
+      alert('Erro ao abrir tela de alterar PIN: ' + String(e && e.message || e));
     }
   }
 
@@ -1901,19 +1996,19 @@ class AppController {
       ddWrap.id = 'adminDropdownWrap';
       ddWrap.style.cssText = 'position:relative;display:inline-block;margin-left:4px;z-index:10000;';
       ddWrap.innerHTML = `
-        <button type="button" id="adminDropdownBtn" class="btn btn-sm no-print" style="background:rgba(234,88,12,0.15);border:1px solid rgba(234,88,12,0.45);color:#c2410c;font-weight:700;display:inline-flex;align-items:center;gap:5px;padding:5px 10px;">
+        <button type="button" id="adminDropdownBtn" class="btn btn-sm no-print" style="background:#fff;border:1px solid rgba(234,88,12,0.6);color:#c2410c;font-weight:700;display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.1);">
           <span>⚙️</span><span class="btn-header-text">Admin</span><span style="font-size:0.7rem;">▾</span>
         </button>
-        <div id="adminDropdownMenu" style="position:absolute;right:0;top:calc(100% + 7px);min-width:240px;max-width:320px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:0 14px 40px rgba(0,0,0,0.22);z-index:100001;padding:6px;display:none;flex-direction:column;gap:3px;">
-          <button type="button" id="admMenuGestao" style="display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:6px;border:0;background:transparent;color:var(--text);cursor:pointer;font-size:0.9rem;text-align:left;font-weight:600;">
-            👥 <span>Gestão de Acessos</span>
+        <div id="adminDropdownMenu" style="position:absolute;right:0;top:calc(100% + 7px);min-width:260px;max-width:340px;background:#ffffff !important;color:#0f172a !important;backdrop-filter:none !important;-webkit-backdrop-filter:none !important;opacity:1 !important;border:1px solid rgba(15,23,42,0.18);border-radius:12px;box-shadow:0 18px 48px rgba(15,23,42,0.28);z-index:100001;padding:8px;display:none;flex-direction:column;gap:3px;">
+          <button type="button" id="admMenuGestao" style="display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:8px;border:0;background:transparent;color:#0f172a !important;cursor:pointer;font-size:0.95rem;text-align:left;font-weight:600;transition:background-color 0.12s ease;">
+            👥 <span style="color:#0f172a !important;">Gestão de Acessos</span>
           </button>
-          <button type="button" id="admMenuPin" style="display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:6px;border:0;background:transparent;color:var(--text);cursor:pointer;font-size:0.9rem;text-align:left;">
-            🔑 <span>Alterar PIN Administrador</span>
+          <button type="button" id="admMenuPin" style="display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:8px;border:0;background:transparent;color:#0f172a !important;cursor:pointer;font-size:0.95rem;text-align:left;transition:background-color 0.12s ease;">
+            🔑 <span style="color:#0f172a !important;">Alterar PIN Administrador</span>
           </button>
-          <div style="height:1px;background:var(--border);margin:5px 3px;opacity:0.7;"></div>
-          <button type="button" id="admMenuSair" style="display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:6px;border:0;background:transparent;color:#991b1b;cursor:pointer;font-size:0.9rem;text-align:left;font-weight:700;">
-            🚪 <span>Sair (logout)</span>
+          <div style="height:1px;background:#e2e8f0;margin:5px 4px;opacity:0.9;"></div>
+          <button type="button" id="admMenuSair" style="display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:8px;border:0;background:transparent;color:#991b1b !important;cursor:pointer;font-size:0.95rem;text-align:left;font-weight:700;transition:background-color 0.12s ease;">
+            🚪 <span style="color:#991b1b !important;">Sair (logout)</span>
           </button>
         </div>
       `;
@@ -1951,7 +2046,7 @@ class AppController {
           menu.style.right = 'auto';
           menu.style.left = '0';
         }
-      } catch (_) {}
+      } catch (_) { }
     };
     const toggleMenu = (force) => {
       const newDisplay = typeof force === 'boolean' ? force : (menu.style.display !== 'flex');
@@ -1987,44 +2082,53 @@ class AppController {
   static openAdminPanel() { this.openAdminGestaoAcessos(); }
 
   static async openAdminGestaoAcessos() {
-    const isAdm = await AppController.isCurrentUserSuperAdmin();
-    if (!isAdm) {
-      AppController.showToast('🔒 Apenas Super Administradores podem acessar este painel.');
-      return;
-    }
-    let backdrop = document.getElementById('modalAdminGestaoBackdrop');
-    if (backdrop) { document.body.removeChild(backdrop); }
-    backdrop = document.createElement('div');
-    backdrop.id = 'modalAdminGestaoBackdrop';
-    backdrop.className = 'modal-backdrop';
-    backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.78);z-index:999999;display:flex;align-items:flex-start;justify-content:center;padding:1.2rem;overflow-y:auto;';
-    const card = document.createElement('div');
-    card.className = 'modal-card';
-    card.style.cssText = 'background:var(--bg);color:var(--text);border-radius:var(--radius);box-shadow:0 30px 80px rgba(0,0,0,0.35);width:100%;max-width:1080px;margin:auto;overflow:hidden;';
-    card.innerHTML = `
-      <div style="padding:1.1rem 1.4rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(90deg,rgba(234,88,12,0.1),rgba(59,130,246,0.08));">
+    try {
+      // Fecha submenu de Admin (caso esteja aberto)
+      try {
+        const openMenu = document.getElementById('adminDropdownMenu');
+        if (openMenu) openMenu.style.display = 'none';
+      } catch (_) { }
+      let isAdm = false;
+      try { isAdm = await AppController.isCurrentUserSuperAdmin(); }
+      catch (e) { isAdm = false; }
+      if (!isAdm) {
+        try { alert('🔒 Apenas Super Administradores podem acessar o Painel de Gestão de Acessos.\n\nSua conta não está marcada como Administrador no app_config.super_admin_emails.'); } catch (_) { }
+        try { AppController.showToast('🔒 Apenas Super Administradores podem acessar este painel.'); } catch (_) { }
+        return;
+      }
+      let backdrop = document.getElementById('modalAdminGestaoBackdrop');
+      if (backdrop) { try { document.body.removeChild(backdrop); } catch (_) { } }
+      backdrop = document.createElement('div');
+      backdrop.id = 'modalAdminGestaoBackdrop';
+      backdrop.className = 'modal-backdrop';
+      backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.78);z-index:999999;display:flex;align-items:flex-start;justify-content:center;padding:1.2rem;overflow-y:auto;';
+      const card = document.createElement('div');
+      card.className = 'modal-card';
+      card.style.cssText = 'background:#ffffff;color:#0f172a;border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,0.35);width:100%;max-width:1100px;margin:2vh auto;overflow:hidden;border:1px solid #e2e8f0;';
+      card.innerHTML = `
+      <div style="padding:1.1rem 1.4rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(90deg,rgba(234,88,12,0.10),rgba(59,130,246,0.08));">
         <div>
-          <h3 style="margin:0;font-size:1.15rem;font-weight:800;">👥 Gestão de Acessos</h3>
-          <div style="font-size:0.82rem;color:var(--text-dim);margin-top:2px;">
+          <h3 style="margin:0;font-size:1.15rem;font-weight:800;color:#0f172a;">👥 Gestão de Acessos</h3>
+          <div style="font-size:0.82rem;color:#475569;margin-top:2px;">
             Lista de todos os usuários cadastrados · Promova para Administrador · Exclua contas permanentemente
           </div>
         </div>
-        <button type="button" id="admGestaoClose" class="btn btn-outline btn-sm" style="padding:4px 10px;font-size:0.8rem;">✕ Fechar</button>
+        <button type="button" id="admGestaoClose" class="btn btn-outline btn-sm" style="padding:4px 10px;font-size:0.8rem;background:#fff;border:1px solid #cbd5e1;color:#334155;">✕ Fechar</button>
       </div>
-      <div style="padding:1.2rem 1.4rem;display:flex;flex-direction:column;gap:1rem;">
+      <div style="padding:1.2rem 1.4rem;display:flex;flex-direction:column;gap:1rem;background:#fff;">
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-          <input type="search" id="admSearchInput" placeholder="🔎 Buscar por email..." style="flex:1 1 320px;min-width:220px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-soft);color:var(--text);font-size:0.92rem;" />
-          <button type="button" id="admBtnRefresh" class="btn btn-outline btn-sm" style="padding:9px 14px;">🔄 Atualizar lista</button>
+          <input type="search" id="admSearchInput" placeholder="🔎 Buscar por email..." style="flex:1 1 320px;min-width:220px;padding:9px 12px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#0f172a;font-size:0.92rem;font-family:inherit;" />
+          <button type="button" id="admBtnRefresh" class="btn btn-outline btn-sm" style="padding:9px 14px;background:#fff;border:1px solid #cbd5e1;color:#334155;">🔄 Atualizar lista</button>
           <div style="flex:1 1 220px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
             <span id="admSummaryBadge" class="badge" style="font-size:0.78rem;padding:5px 10px;">--</span>
             <span id="admSummaryAdmins" class="badge badge-pago" style="font-size:0.78rem;padding:5px 10px;">-- Admins</span>
           </div>
         </div>
         <div id="admStatusMsg" style="display:none;"></div>
-        <div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);">
-          <table id="admUsersTable" style="width:100%;border-collapse:collapse;font-size:0.86rem;">
+        <div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
+          <table id="admUsersTable" style="width:100%;border-collapse:collapse;font-size:0.86rem;color:#0f172a;">
             <thead>
-              <tr style="background:var(--bg-soft);color:var(--text-dim);">
+              <tr style="background:#f1f5f9;color:#334155;">
                 <th style="padding:10px 12px;text-align:left;font-weight:700;">Email</th>
                 <th style="padding:10px 12px;text-align:left;font-weight:700;">Criado em</th>
                 <th style="padding:10px 12px;text-align:left;font-weight:700;">Último Login</th>
@@ -2033,38 +2137,57 @@ class AppController {
               </tr>
             </thead>
             <tbody id="admUsersTbody">
-              <tr><td colspan="5" style="padding:1rem 1.2rem;color:var(--text-dim);text-align:center;">Carregando...</td></tr>
+              <tr><td colspan="5" style="padding:1rem 1.2rem;color:#475569;text-align:center;">Carregando...</td></tr>
             </tbody>
           </table>
         </div>
       </div>
     `;
-    backdrop.appendChild(card);
-    document.body.appendChild(backdrop);
-    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) document.body.removeChild(backdrop); });
-    card.querySelector('#admGestaoClose').addEventListener('click', () => document.body.removeChild(backdrop));
-    card.querySelector('#admBtnRefresh').addEventListener('click', () => AppController._adminLoadUsersIntoTable(card));
-    card.querySelector('#admSearchInput').addEventListener('input', () => AppController._adminFilterUsers(card));
+      backdrop.appendChild(card);
+      document.body.appendChild(backdrop);
+      backdrop.addEventListener('click', (e) => { if (e.target === backdrop) try { document.body.removeChild(backdrop); } catch (_) { } });
+      card.querySelector('#admGestaoClose').addEventListener('click', () => { try { document.body.removeChild(backdrop); } catch (_) { } });
+      card.querySelector('#admBtnRefresh').addEventListener('click', () => AppController._adminLoadUsersIntoTable(card));
+      card.querySelector('#admSearchInput').addEventListener('input', () => AppController._adminFilterUsers(card));
 
-    const warnBox = card.querySelector('#admStatusMsg');
-    warnBox.style.display = 'block';
-    warnBox.style.cssText = 'padding:10px 14px;border:1px solid rgba(59,130,246,0.3);background:rgba(59,130,246,0.06);color:#1d4ed8;border-radius:var(--radius-sm);font-size:0.86rem;line-height:1.55;';
-    warnBox.innerHTML = '<strong>ℹ️ Primeira configuração:</strong> Se esta tela aparecer com um erro vermelho abaixo, abra o SQL Editor do Supabase e cole/execute a Migration 007 (5 funções + tabela app_config). Sem isso as funcionalidades não funcionam (RPC admin_list_users inexistente).';
-    setTimeout(() => { if (warnBox.dataset.persist !== 'true') warnBox.style.display = 'none'; }, 9000);
+      const warnBox = card.querySelector('#admStatusMsg');
+      warnBox.style.display = 'block';
+      warnBox.style.cssText = 'padding:12px 14px;border:1px solid rgba(59,130,246,0.3);background:rgba(59,130,246,0.06);color:#1d4ed8;border-radius:10px;font-size:0.86rem;line-height:1.55;';
+      warnBox.innerHTML = '<strong>ℹ️ Primeira configuração:</strong> Se esta tela aparecer com um erro VERMELHO abaixo, abra o SQL Editor do Supabase e cole/execute a Migration 007 (5 funções + tabela app_config). Sem isso as funcionalidades não funcionam (RPC admin_list_users inexistente).';
+      warnBox.dataset.persist = 'true';
+      setTimeout(() => {
+        try {
+          const s = card.querySelector('#admStatusMsg');
+          if (s && s.dataset.persist !== 'force') s.style.display = 'none';
+        } catch (_) { }
+      }, 11000);
 
-    const myEmail = (AuthManager.getCurrentUserEmail() || '').trim().toLowerCase();
-    card._gestaoContext = { allUsers: [], myEmail: myEmail };
-    AppController._adminLoadUsersIntoTable(card);
+      const myEmail = (AuthManager.getCurrentUserEmail() || '').trim().toLowerCase();
+      card._gestaoContext = { allUsers: [], myEmail: myEmail };
+      try { AppController._adminLoadUsersIntoTable(card); }
+      catch (e) {
+        try { AppController.showToast('Erro ao carregar usuários: ' + String(e.message || e)); } catch (_) { }
+      }
+    } catch (e) {
+      try {
+        alert('Erro ao abrir Gestão de Acessos: ' + String(e && e.message || e));
+      } catch (_) { }
+      try {
+        AppController.showToast('Erro: ' + String(e && e.message || e));
+      } catch (_) { }
+    }
   }
 
   static _adminFilterUsers(card) {
-    const ctx = card._gestaoContext || {};
-    const list = Array.isArray(ctx.allUsers) ? ctx.allUsers : [];
-    const q = (card.querySelector('#admSearchInput').value || '').trim().toLowerCase();
-    const filtered = !q ? list : list.filter(u => String(u.email || '').toLowerCase().includes(q));
-    const tbody = card.querySelector('#admUsersTbody');
-    this._adminRenderUserRows(tbody, filtered, ctx);
-    this._adminUpdateSummary(card, list);
+    try {
+      const ctx = card._gestaoContext || {};
+      const list = Array.isArray(ctx.allUsers) ? ctx.allUsers : [];
+      const q = (card.querySelector('#admSearchInput').value || '').trim().toLowerCase();
+      const filtered = !q ? list : list.filter(u => String(u.email || '').toLowerCase().includes(q));
+      const tbody = card.querySelector('#admUsersTbody');
+      this._adminRenderUserRows(tbody, filtered, ctx);
+      this._adminUpdateSummary(card, list);
+    } catch (_) { }
   }
 
   static _adminUpdateSummary(card, list) {
@@ -2073,7 +2196,7 @@ class AppController {
       const admins = list.filter(u => !!u.is_super_admin).length;
       card.querySelector('#admSummaryBadge').textContent = '👥 ' + total + ' usuários';
       card.querySelector('#admSummaryAdmins').textContent = '🔑 ' + admins + ' Admin(s) do sistema';
-    } catch (_) {}
+    } catch (_) { }
   }
 
   static _adminRenderUserRows(tbody, list, ctx) {
