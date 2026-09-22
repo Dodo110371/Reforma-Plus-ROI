@@ -1315,8 +1315,27 @@ class AppController {
       ? (isCloud && userEmail ? '🔓 ' + userEmail.split('@')[0] + ' (Sair)' : '🔓 Admin (Sair)')
       : '🔑 Entrar';
     if (btnAuthToggle) {
-      btnAuthToggle.textContent = btnLabel;
       btnAuthToggle.className = isAuth ? 'btn btn-primary btn-sm no-print' : 'btn btn-outline btn-sm no-print';
+      btnAuthToggle.innerHTML = '';
+      const iEl = document.createElement('span');
+      const tEl = document.createElement('span');
+      tEl.className = 'btn-header-text';
+      if (isAuth) {
+        iEl.textContent = '🔓';
+        tEl.textContent = (isCloud && userEmail ? (userEmail.split('@')[0] || userEmail) + ' (Sair)' : 'Admin (Sair)');
+      } else {
+        iEl.textContent = '🔑';
+        tEl.textContent = 'Entrar';
+      }
+      btnAuthToggle.appendChild(iEl);
+      btnAuthToggle.appendChild(document.createTextNode(' '));
+      btnAuthToggle.appendChild(tEl);
+      try {
+        const title = isAuth
+          ? (isCloud && userEmail ? 'Sair da conta ' + userEmail : 'Encerrar sessão administrativa')
+          : 'Acesso Administrador';
+        btnAuthToggle.setAttribute('title', title);
+      } catch (_) { }
     }
     if (btnDrawerAuthToggle) {
       const iconEl = btnDrawerAuthToggle.querySelector('.drawer-action-icon');
@@ -1780,12 +1799,14 @@ class AppController {
 
   static async isCurrentUserSuperAdmin() {
     try {
-      if (AuthManager.isAuthenticated() && !AuthManager._hasSupabaseSessionSync()) {
-        return true;
-      }
       const email = AuthManager.getCurrentUserEmail() || '';
       const norm = email.trim().toLowerCase();
+      // Caso 1: autenticação local (PIN) SEM email = Admin (compatibilidade legacy)
+      if (AuthManager.isAuthenticated() && !AuthManager._hasSupabaseSessionSync() && !norm) {
+        return true;
+      }
       if (!norm) return false;
+      // Caso 2: Fallback hardcoded (rosanacas1975@gmail.com etc)
       if (SUPER_ADMIN_EMAILS.some(e => e.trim().toLowerCase() === norm)) return true;
 
       try {
@@ -1871,48 +1892,78 @@ class AppController {
       return;
     }
 
-    // Removendo botão antigo caso exista
     let old = document.getElementById('btnAdminPanelToggle');
     if (old) old.remove();
 
+    const parent = authBtn.parentElement;
     if (!ddWrap) {
       ddWrap = document.createElement('div');
       ddWrap.id = 'adminDropdownWrap';
-      ddWrap.style.cssText = 'position:relative;display:inline-block;margin-left:6px;';
+      ddWrap.style.cssText = 'position:relative;display:inline-block;margin-left:4px;z-index:10000;';
       ddWrap.innerHTML = `
-        <button type="button" id="adminDropdownBtn" class="btn btn-sm no-print" style="background:rgba(234,88,12,0.15);border:1px solid rgba(234,88,12,0.4);color:#c2410c;font-weight:600;display:inline-flex;align-items:center;gap:4px;">
-          ⚙️ Admin <span style="font-size:0.7rem;">▾</span>
+        <button type="button" id="adminDropdownBtn" class="btn btn-sm no-print" style="background:rgba(234,88,12,0.15);border:1px solid rgba(234,88,12,0.45);color:#c2410c;font-weight:700;display:inline-flex;align-items:center;gap:5px;padding:5px 10px;">
+          <span>⚙️</span><span class="btn-header-text">Admin</span><span style="font-size:0.7rem;">▾</span>
         </button>
-        <div id="adminDropdownMenu" style="position:absolute;right:0;top:calc(100% + 6px);min-width:240px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:0 12px 30px rgba(0,0,0,0.18);z-index:999998;padding:6px;display:none;flex-direction:column;gap:2px;">
-          <button type="button" id="admMenuGestao" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;border:0;background:transparent;color:var(--text);cursor:pointer;font-size:0.9rem;text-align:left;">
+        <div id="adminDropdownMenu" style="position:absolute;right:0;top:calc(100% + 7px);min-width:240px;max-width:320px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:0 14px 40px rgba(0,0,0,0.22);z-index:100001;padding:6px;display:none;flex-direction:column;gap:3px;">
+          <button type="button" id="admMenuGestao" style="display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:6px;border:0;background:transparent;color:var(--text);cursor:pointer;font-size:0.9rem;text-align:left;font-weight:600;">
             👥 <span>Gestão de Acessos</span>
           </button>
-          <button type="button" id="admMenuPin" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;border:0;background:transparent;color:var(--text);cursor:pointer;font-size:0.9rem;text-align:left;">
+          <button type="button" id="admMenuPin" style="display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:6px;border:0;background:transparent;color:var(--text);cursor:pointer;font-size:0.9rem;text-align:left;">
             🔑 <span>Alterar PIN Administrador</span>
           </button>
-          <div style="height:1px;background:var(--border);margin:4px 2px;"></div>
-          <button type="button" id="admMenuSair" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;border:0;background:transparent;color:#991b1b;cursor:pointer;font-size:0.9rem;text-align:left;font-weight:600;">
+          <div style="height:1px;background:var(--border);margin:5px 3px;opacity:0.7;"></div>
+          <button type="button" id="admMenuSair" style="display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:6px;border:0;background:transparent;color:#991b1b;cursor:pointer;font-size:0.9rem;text-align:left;font-weight:700;">
             🚪 <span>Sair (logout)</span>
           </button>
         </div>
       `;
-      const parent = authBtn.parentElement;
-      if (parent && !parent.contains(ddWrap)) parent.appendChild(ddWrap);
+    }
+    if (parent && !parent.contains(ddWrap)) {
+      try {
+        if (authBtn.nextSibling) {
+          parent.insertBefore(ddWrap, authBtn.nextSibling);
+        } else {
+          parent.appendChild(ddWrap);
+        }
+      } catch (_) {
+        parent.appendChild(ddWrap);
+      }
     }
 
     const btn = ddWrap.querySelector('#adminDropdownBtn');
     const menu = ddWrap.querySelector('#adminDropdownMenu');
+    const adjustMenu = () => {
+      try {
+        const docW = (window.innerWidth || document.documentElement.clientWidth || 1280);
+        const wrapRect = ddWrap.getBoundingClientRect();
+        // Alinhar menu à direita do botão admin por padrão
+        menu.style.left = 'auto';
+        menu.style.right = '0';
+        // Se sair pela direita, inverter para alinhar à esquerda do wrap
+        const estRight = wrapRect.right;  // lado direito do menu (right:0)
+        if (estRight + 8 > docW) {
+          menu.style.right = '0';
+          menu.style.left = 'auto';
+        }
+        // Se sair pela esquerda, fixar pelo lado esquerdo disponível
+        const estLeft = wrapRect.right - 260;
+        if (estLeft < 8) {
+          menu.style.right = 'auto';
+          menu.style.left = '0';
+        }
+      } catch (_) {}
+    };
     const toggleMenu = (force) => {
       const newDisplay = typeof force === 'boolean' ? force : (menu.style.display !== 'flex');
       menu.style.display = newDisplay ? 'flex' : 'none';
+      if (newDisplay) setTimeout(adjustMenu, 0);
     };
     btn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); toggleMenu(); };
     document.addEventListener('click', (e) => {
       if (!ddWrap.contains(e.target)) toggleMenu(false);
-    }, { once: true, capture: true });
+    }, true);
 
     const closeAll = () => toggleMenu(false);
-
     ddWrap.querySelector('#admMenuGestao').onclick = () => { closeAll(); AppController.openAdminGestaoAcessos(); };
     ddWrap.querySelector('#admMenuPin').onclick = () => {
       closeAll();
@@ -1925,7 +1976,7 @@ class AppController {
         try { await AuthManager.signOutCloud(); } catch (_) { }
         AuthManager.logout();
         AppController._adminSyncIsSuperAdminCache = false;
-        try { localStorage.removeItem(AppController._ADMIN_ROLE_CACHE_KEY); } catch (_) {}
+        try { localStorage.removeItem(AppController._ADMIN_ROLE_CACHE_KEY); } catch (_) { }
         AppController.updateAuthUI();
         AppController.renderAllViews();
         AppController.showToast('Sessão encerrada.');
@@ -1994,6 +2045,12 @@ class AppController {
     card.querySelector('#admGestaoClose').addEventListener('click', () => document.body.removeChild(backdrop));
     card.querySelector('#admBtnRefresh').addEventListener('click', () => AppController._adminLoadUsersIntoTable(card));
     card.querySelector('#admSearchInput').addEventListener('input', () => AppController._adminFilterUsers(card));
+
+    const warnBox = card.querySelector('#admStatusMsg');
+    warnBox.style.display = 'block';
+    warnBox.style.cssText = 'padding:10px 14px;border:1px solid rgba(59,130,246,0.3);background:rgba(59,130,246,0.06);color:#1d4ed8;border-radius:var(--radius-sm);font-size:0.86rem;line-height:1.55;';
+    warnBox.innerHTML = '<strong>ℹ️ Primeira configuração:</strong> Se esta tela aparecer com um erro vermelho abaixo, abra o SQL Editor do Supabase e cole/execute a Migration 007 (5 funções + tabela app_config). Sem isso as funcionalidades não funcionam (RPC admin_list_users inexistente).';
+    setTimeout(() => { if (warnBox.dataset.persist !== 'true') warnBox.style.display = 'none'; }, 9000);
 
     const myEmail = (AuthManager.getCurrentUserEmail() || '').trim().toLowerCase();
     card._gestaoContext = { allUsers: [], myEmail: myEmail };

@@ -951,50 +951,63 @@
 
 <body data-theme="light">
 
-  <!-- Header Superior -->
-  <header class="app-header">
-    <div class="brand-container" style="cursor:pointer;" onclick="AppController.goHome()" title="Voltar para o início">
-      <div class="brand-logo">
-        <img src="./assets/icons/icon-192.png" alt="Logo ReformaPlus">
-      </div>
-      <div>
-        <h1 class="brand-title">ReformaPlus ROI</h1>
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
-          <span class="brand-tagline">Gestão de Reforma & Flip Imobiliário</span>
-          <span id="headerSessionBadge" class="badge badge-pendente" style="font-size: 0.7rem; margin-top: 2px;">🔒
-            Visitante</span>
+  <!-- Header Superior em 2 linhas organizadas -->
+  <header class="app-header" aria-label="Barra superior do aplicativo">
+    <!-- ====== LINHA 1: Marca + Status Global ====== -->
+    <div class="header-topline">
+      <div class="header-left" style="flex: 1 1 auto;">
+        <div class="brand-container" style="cursor:pointer;" onclick="AppController.goHome()" title="Voltar para o início">
+          <div class="brand-logo">
+            <img src="./assets/icons/icon-192.png" alt="Logo ReformaPlus">
+          </div>
+          <div>
+            <div class="brand-title-row">
+              <h1 class="brand-title" style="margin:0;">ReformaPlus ROI</h1>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 2px;">
+              <span class="brand-tagline">Gestão de Reforma & Flip Imobiliário</span>
+              <span id="headerSessionBadge" class="badge badge-pendente" style="font-size: 0.7rem; padding: 2px 8px;">🔒
+                Visitante</span>
+            </div>
+          </div>
         </div>
+      </div>
+      <div class="header-right">
+        <button id="btnInstallPWA" class="btn btn-gold btn-sm btn-header-text no-print" style="display: none;">
+          📲 <span>Instalar App</span>
+        </button>
+        <button id="themeToggle" class="btn btn-icon btn-sm no-print" title="Alternar tema claro / escuro">
+          🌙
+        </button>
+        <button id="btnMobileMenu" class="btn btn-icon btn-sm mobile-menu-btn no-print" title="Abrir menu lateral">
+          ☰
+        </button>
       </div>
     </div>
 
-    <div class="header-actions">
-      <div class="desktop-only no-print" style="display: flex; align-items: center; gap: 0.5rem;">
-        <label for="propertySelector" class="sr-only" aria-hidden="true">Imóvel ativo</label>
-        <select id="propertySelector" class="form-input"
-          style="min-width: 220px; height: 34px; padding: 0 0.75rem; background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border); border-radius: 10px; font-size: 0.9rem;">
+    <!-- ====== LINHA 2: Imóvel ativo + Ações do usuário ====== -->
+    <div class="header-bottomline">
+      <div class="header-left">
+        <span class="label-imovel-ativo desktop-only">🏢 Imóvel ativo</span>
+        <label for="propertySelector" class="sr-only" aria-hidden="true">Selecione o imóvel ativo</label>
+        <select id="propertySelector" class="form-input no-print"
+          style="min-width: 230px; max-width: 380px; height: 36px; padding: 0 0.75rem; background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border); border-radius: 10px; font-size: 0.9rem; font-weight: 500;">
         </select>
-        <button id="btnNewPropertyHeader" class="btn btn-gold btn-sm no-print" title="Cadastrar novo imóvel">
-          ➕ Novo Imóvel
+        <button id="btnNewPropertyHeader" class="btn btn-gold btn-sm no-print btn-header-text" title="Cadastrar novo imóvel">
+          ➕ <span>Novo Imóvel</span>
         </button>
       </div>
-      <button id="btnInstallPWA" class="btn btn-gold btn-sm" style="display: none;">
-        📲 Instalar App
-      </button>
-      <button id="btnAuthToggle" class="btn btn-outline btn-sm no-print" title="Acesso Administrador">
-        🔑 Entrar
-      </button>
-      <button id="btnExportCSV" class="btn btn-outline btn-sm desktop-only no-print" title="Exportar CSV">
-        📊 Exportar CSV
-      </button>
-      <button id="btnPrintReport" class="btn btn-outline btn-sm desktop-only no-print" title="Imprimir / PDF">
-        🖨️ PDF
-      </button>
-      <button id="themeToggle" class="btn btn-icon btn-sm no-print" title="Alternar Tema">
-        🌙
-      </button>
-      <button id="btnMobileMenu" class="btn btn-icon btn-sm mobile-menu-btn no-print" title="Abrir Menu">
-        ☰
-      </button>
+      <div class="header-right" style="gap: 0.4rem;">
+        <button id="btnExportCSV" class="btn btn-outline btn-sm btn-header-text desktop-only no-print" title="Exportar dados do imóvel atual para planilha CSV">
+          📊 <span>Exportar CSV</span>
+        </button>
+        <button id="btnPrintReport" class="btn btn-outline btn-sm btn-header-text desktop-only no-print" title="Gerar relatório em PDF / Imprimir">
+          🖨️ <span>PDF</span>
+        </button>
+        <button id="btnAuthToggle" class="btn btn-outline btn-sm no-print" title="Acesso Administrador">
+          🔑 <span class="btn-header-text">Entrar</span>
+        </button>
+      </div>
     </div>
   </header>
 
