@@ -1357,7 +1357,11 @@ class AppController {
       document.body.classList.remove('guest-mode');
     }
 
-    try { this._adminInjectButtonInHeader(); } catch (_) { }
+    (async () => {
+      try { AppController._adminSyncIsSuperAdminCache = await AppController.isCurrentUserSuperAdmin(); }
+      catch (_) { AppController._adminSyncIsSuperAdminCache = false; }
+      try { AppController._adminInjectButtonInHeader(); } catch (_) { }
+    })();
   }
 
   static handleChangePinSubmit() {
@@ -1763,20 +1767,51 @@ class AppController {
   }
 
   // ============================================================
-  // ADMIN: Exclusão de contas (v2.1.7)
-  // Respeitadas restrições: NÃO alteramos RLS/banco/migrations/
-  // StorageManager/SupabaseSync/AuthManager. Apenas client-side.
+  // ADMIN: Gestão de Acessos (v2.1.8)
+  // - Submenu DROPDOWN visível em "🔓 Entrar como Admin"
+  // - Tabela completa com TODOS auth.users
+  // - Promover / Rebaixar / Excluir individual (Admin direto)
+  // - Roles dinâmicos via app_config (migration 007)
   // ============================================================
   static _ADMIN_DELETE_KEY = 'reformaplus_admin_delete_queue_v1';
+  static _ADMIN_ROLE_CACHE_KEY = 'reformaplus_admin_role_cache_v1';
+  static _ADMIN_ROLE_CACHE_TTL_MS = 60 * 1000;
+  static _adminSyncIsSuperAdminCache = false;
 
-  static isCurrentUserSuperAdmin() {
-    if (AuthManager.isAuthenticated() && !AuthManager._hasSupabaseSessionSync()) {
-      return true;
-    }
-    const email = AuthManager.getCurrentUserEmail() || '';
-    const norm = email.trim().toLowerCase();
-    if (!norm) return false;
-    return SUPER_ADMIN_EMAILS.some(e => e.trim().toLowerCase() === norm);
+  static async isCurrentUserSuperAdmin() {
+    try {
+      if (AuthManager.isAuthenticated() && !AuthManager._hasSupabaseSessionSync()) {
+        return true;
+      }
+      const email = AuthManager.getCurrentUserEmail() || '';
+      const norm = email.trim().toLowerCase();
+      if (!norm) return false;
+      if (SUPER_ADMIN_EMAILS.some(e => e.trim().toLowerCase() === norm)) return true;
+
+      try {
+        const c = window.SupabaseClient?.getClient?.();
+        if (c) {
+          let cache = null;
+          try { cache = JSON.parse(localStorage.getItem(this._ADMIN_ROLE_CACHE_KEY) || 'null'); } catch (_) { cache = null; }
+          let list = null;
+          if (cache && Array.isArray(cache.list) && (cache.ts || 0) > (Date.now() - this._ADMIN_ROLE_CACHE_TTL_MS)) {
+            list = cache.list;
+          } else {
+            const { data, error } = await c.rpc('admin_get_super_admin_emails', {});
+            if (!error && Array.isArray(data)) {
+              list = data.map(e => String(e || '').trim().toLowerCase()).filter(Boolean);
+              localStorage.setItem(this._ADMIN_ROLE_CACHE_KEY, JSON.stringify({ ts: Date.now(), list }));
+            }
+          }
+          if (list && Array.isArray(list) && list.includes(norm)) return true;
+        }
+      } catch (_) { }
+      return false;
+    } catch (_) { return false; }
+  }
+
+  static _adminInvalidateRoleCache() {
+    try { localStorage.removeItem(this._ADMIN_ROLE_CACHE_KEY); } catch (_) { }
   }
 
   static _adminGetDeleteQueue() {
@@ -1810,9 +1845,13 @@ class AppController {
     item.requested_by = currentEmail || 'admin-local';
     item.requested_at = new Date().toISOString();
     item.reason = (reason || '').toString().substring(0, 500) || null;
-    item.share_token = btoa(unescape(encodeURIComponent(norm + '|' + Date.now())));
+    try {
+      item.share_token = btoa(unescape(encodeURIComponent(norm + '|' + Date.now())));
+    } catch (_) {
+      item.share_token = Buffer.from(norm + '|' + Date.now()).toString('base64');
+    }
     this._adminSaveDeleteQueue(queue);
-    const url = (window.location.origin + window.location.pathname) + '?admin_delete_account=' + encodeURIComponent(norm) + '&t=' + encodeURIComponent(item.share_token);
+    const url = (window.location.origin + window.location.pathname) + '?admin_delete_account=' + encodeURIComponent(norm) + '&t=' + encodeURIComponent(item.share_token || '');
     return { success: true, item, share_link: url };
   }
 
@@ -1823,136 +1862,358 @@ class AppController {
   }
 
   static _adminInjectButtonInHeader() {
-    let btn = document.getElementById('btnAdminPanelToggle');
-    const shouldShow = this.isCurrentUserSuperAdmin();
-    if (!shouldShow) {
-      if (btn) btn.remove();
+    let ddWrap = document.getElementById('adminDropdownWrap');
+    const shouldShow = AppController._adminSyncIsSuperAdminCache;
+
+    const authBtn = document.getElementById('btnAuthToggle');
+    if (!shouldShow || !authBtn) {
+      if (ddWrap) ddWrap.remove();
       return;
     }
-    if (!btn) {
-      btn = document.createElement('button');
-      btn.id = 'btnAdminPanelToggle';
-      btn.type = 'button';
-      btn.className = 'btn btn-outline btn-sm no-print';
-      btn.style.marginLeft = '6px';
-      btn.innerHTML = '🔧 Admin';
-      btn.title = 'Painel do Administrador (excluir contas cadastradas)';
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        AppController.openAdminPanel();
-      });
+
+    // Removendo botão antigo caso exista
+    let old = document.getElementById('btnAdminPanelToggle');
+    if (old) old.remove();
+
+    if (!ddWrap) {
+      ddWrap = document.createElement('div');
+      ddWrap.id = 'adminDropdownWrap';
+      ddWrap.style.cssText = 'position:relative;display:inline-block;margin-left:6px;';
+      ddWrap.innerHTML = `
+        <button type="button" id="adminDropdownBtn" class="btn btn-sm no-print" style="background:rgba(234,88,12,0.15);border:1px solid rgba(234,88,12,0.4);color:#c2410c;font-weight:600;display:inline-flex;align-items:center;gap:4px;">
+          ⚙️ Admin <span style="font-size:0.7rem;">▾</span>
+        </button>
+        <div id="adminDropdownMenu" style="position:absolute;right:0;top:calc(100% + 6px);min-width:240px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:0 12px 30px rgba(0,0,0,0.18);z-index:999998;padding:6px;display:none;flex-direction:column;gap:2px;">
+          <button type="button" id="admMenuGestao" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;border:0;background:transparent;color:var(--text);cursor:pointer;font-size:0.9rem;text-align:left;">
+            👥 <span>Gestão de Acessos</span>
+          </button>
+          <button type="button" id="admMenuPin" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;border:0;background:transparent;color:var(--text);cursor:pointer;font-size:0.9rem;text-align:left;">
+            🔑 <span>Alterar PIN Administrador</span>
+          </button>
+          <div style="height:1px;background:var(--border);margin:4px 2px;"></div>
+          <button type="button" id="admMenuSair" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;border:0;background:transparent;color:#991b1b;cursor:pointer;font-size:0.9rem;text-align:left;font-weight:600;">
+            🚪 <span>Sair (logout)</span>
+          </button>
+        </div>
+      `;
+      const parent = authBtn.parentElement;
+      if (parent && !parent.contains(ddWrap)) parent.appendChild(ddWrap);
     }
-    const header = document.querySelector('.app-header-actions') || document.querySelector('.app-header .header-right') || document.querySelector('.app-header .header-actions');
-    const parent = header || (document.getElementById('btnAuthToggle')?.parentElement);
-    if (parent && !parent.contains(btn)) parent.appendChild(btn);
+
+    const btn = ddWrap.querySelector('#adminDropdownBtn');
+    const menu = ddWrap.querySelector('#adminDropdownMenu');
+    const toggleMenu = (force) => {
+      const newDisplay = typeof force === 'boolean' ? force : (menu.style.display !== 'flex');
+      menu.style.display = newDisplay ? 'flex' : 'none';
+    };
+    btn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); toggleMenu(); };
+    document.addEventListener('click', (e) => {
+      if (!ddWrap.contains(e.target)) toggleMenu(false);
+    }, { once: true, capture: true });
+
+    const closeAll = () => toggleMenu(false);
+
+    ddWrap.querySelector('#admMenuGestao').onclick = () => { closeAll(); AppController.openAdminGestaoAcessos(); };
+    ddWrap.querySelector('#admMenuPin').onclick = () => {
+      closeAll();
+      AppController.handleChangePinSubmit();
+    };
+    ddWrap.querySelector('#admMenuSair').onclick = () => {
+      closeAll();
+      if (!confirm('Sair e encerrar sessão?')) return;
+      (async () => {
+        try { await AuthManager.signOutCloud(); } catch (_) { }
+        AuthManager.logout();
+        AppController._adminSyncIsSuperAdminCache = false;
+        try { localStorage.removeItem(AppController._ADMIN_ROLE_CACHE_KEY); } catch (_) {}
+        AppController.updateAuthUI();
+        AppController.renderAllViews();
+        AppController.showToast('Sessão encerrada.');
+      })();
+    };
   }
 
-  static openAdminPanel() {
-    if (!this.isCurrentUserSuperAdmin()) {
-      this.showToast('🔒 Apenas Super Administradores podem acessar este painel.');
+  static openAdminPanel() { this.openAdminGestaoAcessos(); }
+
+  static async openAdminGestaoAcessos() {
+    const isAdm = await AppController.isCurrentUserSuperAdmin();
+    if (!isAdm) {
+      AppController.showToast('🔒 Apenas Super Administradores podem acessar este painel.');
       return;
     }
-    let backdrop = document.getElementById('modalAdminBackdrop');
+    let backdrop = document.getElementById('modalAdminGestaoBackdrop');
     if (backdrop) { document.body.removeChild(backdrop); }
     backdrop = document.createElement('div');
-    backdrop.id = 'modalAdminBackdrop';
+    backdrop.id = 'modalAdminGestaoBackdrop';
     backdrop.className = 'modal-backdrop';
-    backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.75);z-index:999999;display:flex;align-items:flex-start;justify-content:center;padding:1.5rem;overflow-y:auto;animation:fadeIn 0.2s ease-out;';
-    const panel = document.createElement('div');
-    panel.className = 'modal-card';
-    panel.style.cssText = 'background:var(--bg);color:var(--text);border-radius:var(--radius);box-shadow:0 30px 60px rgba(0,0,0,0.3);width:100%;max-width:680px;overflow:hidden;';
-    panel.innerHTML = `
-      <div style="padding:1.25rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(90deg,rgba(234,88,12,0.08),rgba(59,130,246,0.05));">
-        <h3 style="margin:0;font-size:1.1rem;font-weight:700;">🔧 Painel do Administrador · Excluir Conta</h3>
-        <button type="button" id="btnAdminPanelClose" class="btn btn-outline btn-sm" style="padding:4px 10px;font-size:0.8rem;">✕ Fechar</button>
+    backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.78);z-index:999999;display:flex;align-items:flex-start;justify-content:center;padding:1.2rem;overflow-y:auto;';
+    const card = document.createElement('div');
+    card.className = 'modal-card';
+    card.style.cssText = 'background:var(--bg);color:var(--text);border-radius:var(--radius);box-shadow:0 30px 80px rgba(0,0,0,0.35);width:100%;max-width:1080px;margin:auto;overflow:hidden;';
+    card.innerHTML = `
+      <div style="padding:1.1rem 1.4rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(90deg,rgba(234,88,12,0.1),rgba(59,130,246,0.08));">
+        <div>
+          <h3 style="margin:0;font-size:1.15rem;font-weight:800;">👥 Gestão de Acessos</h3>
+          <div style="font-size:0.82rem;color:var(--text-dim);margin-top:2px;">
+            Lista de todos os usuários cadastrados · Promova para Administrador · Exclua contas permanentemente
+          </div>
+        </div>
+        <button type="button" id="admGestaoClose" class="btn btn-outline btn-sm" style="padding:4px 10px;font-size:0.8rem;">✕ Fechar</button>
       </div>
-      <div style="padding:1.5rem;display:flex;flex-direction:column;gap:1.25rem;">
-        <div id="adminAlertBox" style="display:none;"></div>
-        <div style="background:rgba(234,88,12,0.06);border:1px solid rgba(234,88,12,0.25);padding:1rem;border-radius:var(--radius-sm);font-size:0.85rem;line-height:1.6;color:var(--text);">
-          <strong style="color:#c2410c;">⚠️ Como funciona a exclusão (100% automática):</strong>
-          <ol style="margin:8px 0 0 1.2rem;padding:0;">
-            <li>Por segurança (RLS do Supabase), cada conta só pode <strong>excluir os seus próprios dados</strong>. Por isso usamos uma fila + auto-exclusão.</li>
-            <li>Email, senha, sessões, refresh tokens, dados das tabelas e recibos do storage <strong>são TODOS apagados automaticamente</strong> (via função segura SECURITY DEFINER).</li>
-            <li>A aplicação marcará o email na <strong>fila de exclusão</strong>. <strong>Na próxima vez que o usuário LOGAR em QUALQUER dispositivo</strong>, aparecerá um modal obrigatório para ele confirmar a exclusão.</li>
-            <li>Alternativa rápida: Copie o <strong>Link de Exclusão Compartilhado</strong> abaixo e envie para o usuário por WhatsApp/email. Ao abrir, ele já confirma a exclusão diretamente.</li>
-          </ol>
+      <div style="padding:1.2rem 1.4rem;display:flex;flex-direction:column;gap:1rem;">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          <input type="search" id="admSearchInput" placeholder="🔎 Buscar por email..." style="flex:1 1 320px;min-width:220px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-soft);color:var(--text);font-size:0.92rem;" />
+          <button type="button" id="admBtnRefresh" class="btn btn-outline btn-sm" style="padding:9px 14px;">🔄 Atualizar lista</button>
+          <div style="flex:1 1 220px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+            <span id="admSummaryBadge" class="badge" style="font-size:0.78rem;padding:5px 10px;">--</span>
+            <span id="admSummaryAdmins" class="badge badge-pago" style="font-size:0.78rem;padding:5px 10px;">-- Admins</span>
+          </div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:0.6rem;">
-          <label style="font-weight:600;font-size:0.9rem;">Email da conta a ser excluída</label>
-          <input type="email" id="adminEmailToDelete" placeholder="usuario@email.com" autocomplete="off" style="padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-soft);color:var(--text);font-size:0.95rem;" />
-          <label style="font-weight:600;font-size:0.9rem;">Motivo (opcional)</label>
-          <textarea id="adminDeleteReason" rows="2" placeholder="Ex: Cadastro duplicado, violação dos termos de uso, conta abandonada." style="padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-soft);color:var(--text);font-size:0.9rem;resize:vertical;font-family:inherit;"></textarea>
-        </div>
-        <div id="adminChecks" style="display:flex;flex-direction:column;gap:0.5rem;font-size:0.85rem;">
-          <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;"><input type="checkbox" id="adminCheck1" style="margin-top:3px;" /> <span><strong>[1/3]</strong> Confirmo que o email acima pertence a uma conta que desejo remover <u>permanentemente</u> dos meus usuários cadastrados.</span></label>
-          <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;"><input type="checkbox" id="adminCheck2" style="margin-top:3px;" /> <span><strong>[2/3]</strong> Entendo que os <strong>dados no banco, recibos no storage e dados locais</strong> serão apagados <strong>APENAS quando o usuário fizer login</strong> (ou clicar no Link de Exclusão Compartilhado).</span></label>
-          <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;"><input type="checkbox" id="adminCheck3" style="margin-top:3px;" /> <span><strong>[3/3]</strong> Entendo que esta ação é <strong>irreversível</strong>. Não há lixeira nem recuperação de dados.</span></label>
-        </div>
-        <button id="adminBtnSubmitDelete" type="button" class="btn btn-primary" style="padding:12px;font-weight:700;background:linear-gradient(90deg,#b91c1c,#c2410c);border-color:#b91c1c;">⚠️ Registrar Solicitação de Exclusão</button>
-        <div id="adminResultBox" style="display:none;"></div>
-        <div id="adminQueueBox" style="display:flex;flex-direction:column;gap:0.5rem;">
-          <h4 style="margin:0.5rem 0 0 0;font-size:0.95rem;font-weight:700;">📋 Fila de exclusões pendentes</h4>
-          <div id="adminQueueList" style="font-size:0.85rem;display:flex;flex-direction:column;gap:0.35rem;"></div>
+        <div id="admStatusMsg" style="display:none;"></div>
+        <div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);">
+          <table id="admUsersTable" style="width:100%;border-collapse:collapse;font-size:0.86rem;">
+            <thead>
+              <tr style="background:var(--bg-soft);color:var(--text-dim);">
+                <th style="padding:10px 12px;text-align:left;font-weight:700;">Email</th>
+                <th style="padding:10px 12px;text-align:left;font-weight:700;">Criado em</th>
+                <th style="padding:10px 12px;text-align:left;font-weight:700;">Último Login</th>
+                <th style="padding:10px 12px;text-align:center;font-weight:700;">Role</th>
+                <th style="padding:10px 12px;text-align:right;font-weight:700;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="admUsersTbody">
+              <tr><td colspan="5" style="padding:1rem 1.2rem;color:var(--text-dim);text-align:center;">Carregando...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     `;
-    backdrop.appendChild(panel);
+    backdrop.appendChild(card);
     document.body.appendChild(backdrop);
     backdrop.addEventListener('click', (e) => { if (e.target === backdrop) document.body.removeChild(backdrop); });
-    const closeBtn = panel.querySelector('#btnAdminPanelClose');
-    closeBtn.addEventListener('click', () => document.body.removeChild(backdrop));
-    const submitBtn = panel.querySelector('#adminBtnSubmitDelete');
-    const emailInput = panel.querySelector('#adminEmailToDelete');
-    const reasonInput = panel.querySelector('#adminDeleteReason');
-    const c1 = panel.querySelector('#adminCheck1');
-    const c2 = panel.querySelector('#adminCheck2');
-    const c3 = panel.querySelector('#adminCheck3');
-    const alertBox = panel.querySelector('#adminAlertBox');
-    const resultBox = panel.querySelector('#adminResultBox');
-    const validate = () => {
-      const okEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput.value.trim());
-      submitBtn.disabled = !(okEmail && c1.checked && c2.checked && c3.checked);
-    };
-    [emailInput, c1, c2, c3].forEach(el => el.addEventListener('change', validate));
-    emailInput.addEventListener('input', validate);
-    submitBtn.disabled = true;
-    submitBtn.addEventListener('click', () => {
-      const r = AppController.adminQueueDeletionFor(emailInput.value, reasonInput.value);
-      alertBox.style.display = 'block';
-      alertBox.style.cssText += 'padding:0.9rem 1rem;border-radius:var(--radius-sm);font-size:0.9rem;';
-      if (!r.success) {
-        alertBox.style.background = 'rgba(239,68,68,0.08)';
-        alertBox.style.border = '1px solid rgba(239,68,68,0.3)';
-        alertBox.style.color = '#991b1b';
-        alertBox.innerHTML = '❌ ' + r.error;
-        return;
-      }
-      alertBox.style.background = 'rgba(16,185,129,0.08)';
-      alertBox.style.border = '1px solid rgba(16,185,129,0.3)';
-      alertBox.style.color = '#065f46';
-      alertBox.innerHTML = '✅ Solicitação de exclusão registrada com sucesso. O usuário-alvo receberá o pedido na próxima vez que fizer login.';
-      resultBox.style.display = 'block';
-      resultBox.style.cssText += 'background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.3);padding:0.9rem 1rem;border-radius:var(--radius-sm);font-size:0.88rem;display:flex;flex-direction:column;gap:0.5rem;';
-      resultBox.innerHTML = `
-        <div style="font-weight:700;">🔗 Link de Exclusão Compartilhado:</div>
-        <div style="background:rgba(0,0,0,0.06);padding:8px 10px;border-radius:6px;word-break:break-all;font-family:ui-monospace,Consolas,monospace;font-size:0.8rem;">${r.share_link}</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button type="button" class="btn btn-outline btn-sm" id="adminCopyLink" style="flex:1;">📋 Copiar link</button>
-          <button type="button" class="btn btn-outline btn-sm" id="adminOpenLink" style="flex:1;">🔎 Abrir em nova aba</button>
-        </div>
-      `;
-      panel.querySelector('#adminCopyLink').addEventListener('click', () => {
-        navigator.clipboard.writeText(r.share_link).then(() => AppController.showToast('Link copiado!')).catch(() => prompt('Copie manualmente:', r.share_link));
-      });
-      panel.querySelector('#adminOpenLink').addEventListener('click', () => window.open(r.share_link, '_blank', 'noopener,noreferrer'));
-      AppController._adminRenderQueueList(panel);
-      [c1, c2, c3].forEach(ch => ch.checked = false);
-      emailInput.value = '';
-      reasonInput.value = '';
-      validate();
+    card.querySelector('#admGestaoClose').addEventListener('click', () => document.body.removeChild(backdrop));
+    card.querySelector('#admBtnRefresh').addEventListener('click', () => AppController._adminLoadUsersIntoTable(card));
+    card.querySelector('#admSearchInput').addEventListener('input', () => AppController._adminFilterUsers(card));
+
+    const myEmail = (AuthManager.getCurrentUserEmail() || '').trim().toLowerCase();
+    card._gestaoContext = { allUsers: [], myEmail: myEmail };
+    AppController._adminLoadUsersIntoTable(card);
+  }
+
+  static _adminFilterUsers(card) {
+    const ctx = card._gestaoContext || {};
+    const list = Array.isArray(ctx.allUsers) ? ctx.allUsers : [];
+    const q = (card.querySelector('#admSearchInput').value || '').trim().toLowerCase();
+    const filtered = !q ? list : list.filter(u => String(u.email || '').toLowerCase().includes(q));
+    const tbody = card.querySelector('#admUsersTbody');
+    this._adminRenderUserRows(tbody, filtered, ctx);
+    this._adminUpdateSummary(card, list);
+  }
+
+  static _adminUpdateSummary(card, list) {
+    try {
+      const total = list.length;
+      const admins = list.filter(u => !!u.is_super_admin).length;
+      card.querySelector('#admSummaryBadge').textContent = '👥 ' + total + ' usuários';
+      card.querySelector('#admSummaryAdmins').textContent = '🔑 ' + admins + ' Admin(s) do sistema';
+    } catch (_) {}
+  }
+
+  static _adminRenderUserRows(tbody, list, ctx) {
+    tbody.innerHTML = '';
+    if (!list || list.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" style="padding:1rem 1.2rem;color:var(--text-dim);text-align:center;">Nenhum usuário encontrado.</td></tr>`;
+      return;
+    }
+    const me = (ctx.myEmail || '').trim().toLowerCase();
+    list.forEach(u => {
+      const email = String(u.email || '');
+      const isAdm = !!u.is_super_admin;
+      const isMe = email.trim().toLowerCase() === me;
+      const tr = document.createElement('tr');
+      tr.style.cssText = 'border-top:1px solid var(--border);';
+      const tdE = document.createElement('td');
+      tdE.style.cssText = 'padding:10px 12px;vertical-align:middle;word-break:break-all;font-weight:500;';
+      tdE.innerHTML = (isMe ? '<span style="color:#0369a1;font-weight:700;">👤 EU</span> · ' : '') + email;
+      const tdC = document.createElement('td');
+      tdC.style.cssText = 'padding:10px 12px;vertical-align:middle;white-space:nowrap;font-size:0.82rem;color:var(--text-dim);';
+      tdC.textContent = u.created_at ? new Date(u.created_at).toLocaleString('pt-BR') : '—';
+      const tdL = document.createElement('td');
+      tdL.style.cssText = 'padding:10px 12px;vertical-align:middle;white-space:nowrap;font-size:0.82rem;color:var(--text-dim);';
+      tdL.textContent = u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleString('pt-BR') : 'Nunca';
+      const tdR = document.createElement('td');
+      tdR.style.cssText = 'padding:10px 12px;vertical-align:middle;text-align:center;';
+      const rBadge = document.createElement('span');
+      rBadge.className = isAdm ? 'badge badge-pago' : 'badge badge-pendente';
+      rBadge.style.cssText = 'font-size:0.8rem;padding:4px 10px;';
+      rBadge.textContent = isAdm ? '🔑 Administrador Sistema' : '👤 Usuário Comum';
+      tdR.appendChild(rBadge);
+
+      const tdA = document.createElement('td');
+      tdA.style.cssText = 'padding:10px 12px;vertical-align:middle;text-align:right;white-space:nowrap;display:flex;gap:6px;justify-content:flex-end;';
+      const btnToggle = document.createElement('button');
+      btnToggle.type = 'button';
+      btnToggle.className = 'btn btn-outline btn-sm';
+      btnToggle.style.cssText = 'font-size:0.8rem;padding:5px 9px;';
+      btnToggle.disabled = isMe;
+      btnToggle.title = isMe ? 'Não é possível alterar o seu próprio role.' : (isAdm ? 'Rebaixar para Usuário Comum' : 'Promover para Administrador do Sistema');
+      btnToggle.textContent = isAdm ? '👤 Rebaixar' : '🔑 Promover';
+      btnToggle.addEventListener('click', () => AppController._adminToggleRole(card, u, !isAdm));
+
+      const btnDel = document.createElement('button');
+      btnDel.type = 'button';
+      btnDel.className = 'btn btn-sm';
+      btnDel.style.cssText = 'font-size:0.8rem;padding:5px 9px;background:rgba(185,28,28,0.1);border:1px solid rgba(185,28,28,0.3);color:#991b1b;font-weight:600;';
+      btnDel.disabled = isMe || isAdm;
+      btnDel.title = isMe ? 'Não é possível excluir a si mesmo.' : (isAdm ? 'Primeiro rebaixe esta conta para Usuário Comum.' : 'Excluir permanentemente esta conta.');
+      btnDel.textContent = '🛑 Excluir';
+      btnDel.addEventListener('click', () => AppController._adminExcluirConta(card, u));
+
+      tdA.appendChild(btnToggle);
+      tdA.appendChild(btnDel);
+      tr.appendChild(tdE); tr.appendChild(tdC); tr.appendChild(tdL); tr.appendChild(tdR); tr.appendChild(tdA);
+      tbody.appendChild(tr);
     });
-    this._adminRenderQueueList(panel);
+  }
+
+  static async _adminLoadUsersIntoTable(card) {
+    const ctx = card._gestaoContext || {};
+    const tbody = card.querySelector('#admUsersTbody');
+    const status = card.querySelector('#admStatusMsg');
+    tbody.innerHTML = `<tr><td colspan="5" style="padding:1rem 1.2rem;color:var(--text-dim);text-align:center;">Carregando usuários do Supabase...</td></tr>`;
+    status.style.display = 'none';
+    try {
+      const c = window.SupabaseClient?.getClient?.();
+      if (!c) throw new Error('Supabase Client não inicializado.');
+      const { data, error } = await c.rpc('admin_list_users', {});
+      if (error) throw new Error(error.message || String(error));
+      let list = [];
+      if (Array.isArray(data)) list = data;
+      else if (data) {
+        try {
+          list = JSON.parse(typeof data === 'string' ? data : JSON.stringify(data));
+          if (!Array.isArray(list)) list = [];
+        } catch (_) { list = []; }
+      }
+      list = list.filter(u => u && typeof u === 'object').map(u => ({
+        id: String(u.id || ''),
+        email: String(u.email || ''),
+        created_at: u.created_at || '',
+        last_sign_in_at: u.last_sign_in_at || '',
+        is_super_admin: !!u.is_super_admin,
+      }));
+      ctx.allUsers = list;
+      card._gestaoContext = ctx;
+      this._adminUpdateSummary(card, list);
+      this._adminFilterUsers(card);
+    } catch (e) {
+      status.style.display = 'block';
+      status.style.cssText = 'padding:12px 14px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);color:#991b1b;border-radius:var(--radius-sm);font-size:0.88rem;';
+      status.innerHTML = '<strong>❌ Falha ao carregar usuários.</strong> Provavelmente a Migration 007 ainda não foi aplicada no SQL Editor Supabase. Erro: ' + (e.message || String(e));
+      tbody.innerHTML = `<tr><td colspan="5" style="padding:1rem 1.2rem;color:#991b1b;text-align:center;">Erro: ${e.message || String(e)}</td></tr>`;
+    }
+  }
+
+  static async _adminToggleRole(card, user, makeAdmin) {
+    const status = card.querySelector('#admStatusMsg');
+    status.style.display = 'none';
+    const action = makeAdmin ? 'Promover a Administrador do Sistema' : 'Rebaixar para Usuário Comum';
+    if (!confirm(`${action}?\n\nEmail: ${user.email}\n\nTem certeza?`)) return;
+    try {
+      const c = window.SupabaseClient?.getClient?.();
+      if (!c) throw new Error('Supabase Client não inicializado.');
+      const { data, error } = await c.rpc('admin_toggle_super_admin', { target_email_in: user.email, make_admin: !!makeAdmin });
+      if (error) throw new Error(error.message || String(error));
+      if (typeof data !== 'string' || !data.startsWith('ok|')) throw new Error(String(data || 'Resposta inválida do servidor.'));
+      this._adminInvalidateRoleCache();
+      AppController._adminSyncIsSuperAdminCache = await AppController.isCurrentUserSuperAdmin();
+      AppController.showToast('✅ Role atualizada com sucesso: ' + user.email + ' → ' + (makeAdmin ? 'Administrador' : 'Usuário Comum'));
+      await this._adminLoadUsersIntoTable(card);
+    } catch (e) {
+      status.style.display = 'block';
+      status.style.cssText = 'padding:12px 14px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);color:#991b1b;border-radius:var(--radius-sm);font-size:0.88rem;';
+      status.innerHTML = '<strong>❌ Falha ao alterar role:</strong> ' + (e.message || String(e));
+    }
+  }
+
+  static async _adminExcluirConta(card, user) {
+    if (!user || !user.email || !user.id) return;
+    const status = card.querySelector('#admStatusMsg');
+    status.style.display = 'none';
+
+    let backdrop = document.getElementById('modalAdminDelConfirmBackdrop');
+    if (backdrop) backdrop.remove();
+    backdrop = document.createElement('div');
+    backdrop.id = 'modalAdminDelConfirmBackdrop';
+    backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(127,29,29,0.9);z-index:1000001;display:flex;align-items:flex-start;justify-content:center;padding:1.2rem;overflow-y:auto;';
+    const modal = document.createElement('div');
+    modal.style.cssText = 'background:var(--bg);color:var(--text);border-radius:var(--radius);box-shadow:0 30px 90px rgba(0,0,0,0.5);width:100%;max-width:620px;margin:auto;border:2px solid #dc2626;';
+    modal.innerHTML = `
+      <div style="padding:1.25rem;border-bottom:1px solid #fecaca;background:rgba(220,38,38,0.06);">
+        <h3 style="margin:0;color:#b91c1c;font-size:1.1rem;">🛑 Excluir permanentemente esta conta?</h3>
+      </div>
+      <div style="padding:1.2rem 1.3rem;display:flex;flex-direction:column;gap:0.9rem;">
+        <div style="font-size:0.92rem;line-height:1.6;">
+          Conta alvo: <strong style="font-size:1rem;">${user.email}</strong><br/>
+          ID: <code style="background:rgba(0,0,0,0.06);padding:1px 6px;border-radius:4px;font-size:0.8rem;">${user.id}</code>
+        </div>
+        <div style="background:rgba(220,38,38,0.06);border:1px solid #fecaca;padding:1rem;border-radius:var(--radius-sm);font-size:0.85rem;line-height:1.65;">
+          <strong style="color:#991b1b;">Ao confirmar, as ações abaixo são executadas e são 100% IRREVERSÍVEIS:</strong>
+          <ul style="margin:8px 0 0 1.2rem;padding:0;display:flex;flex-direction:column;gap:3px;">
+            <li>❌ Apagar TODOS os dados nas tabelas (imóveis, fases, lançamentos, etc)</li>
+            <li>❌ Apagar TODOS os recibos anexados no Storage bucket receipts</li>
+            <li>❌ Remover cadastro de email/senha/sessões em auth.users</li>
+          </ul>
+        </div>
+        <label style="font-size:0.88rem;font-weight:700;color:#991b1b;">Digite <u>EXCLUIR ESTA CONTA</u> abaixo para confirmar:</label>
+        <input type="text" id="admDelPhrase" placeholder="Digite exatamente: EXCLUIR ESTA CONTA" maxlength="30" autocomplete="off" style="padding:10px 12px;border:1px solid #dc2626;border-radius:var(--radius-sm);font-size:1rem;font-weight:600;"/>
+        <label style="font-size:0.88rem;font-weight:700;color:#991b1b;">Digite novamente o <u>email da conta</u> ${user.email} para confirmar:</label>
+        <input type="email" id="admDelEmail" autocomplete="off" placeholder="Digite novamente o email da conta alvo" style="padding:10px 12px;border:1px solid #dc2626;border-radius:var(--radius-sm);font-size:0.95rem;"/>
+        <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-size:0.88rem;"><input type="checkbox" id="admDelCheck" style="margin-top:3px;"/> <span>Confirmo que LI e ENTENDI que esta ação é IRREVERSÍVEL e que não há recuperação.</span></label>
+        <div id="admDelStatus" style="display:none;"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" id="admDelRun" class="btn" style="flex:1 1 240px;padding:12px 1rem;background:#b91c1c;border-color:#991b1b;color:#fff;font-weight:700;" disabled>🛑 SIM, EXCLUIR ESTA CONTA PERMANENTEMENTE</button>
+          <button type="button" id="admDelCancel" class="btn btn-outline" style="flex:1 1 180px;padding:12px 1rem;font-weight:600;">Cancelar</button>
+        </div>
+      </div>
+    `;
+    backdrop.appendChild(modal);
+    document.body.appendChild(backdrop);
+    const ph = modal.querySelector('#admDelPhrase');
+    const em = modal.querySelector('#admDelEmail');
+    const ck = modal.querySelector('#admDelCheck');
+    const run = modal.querySelector('#admDelRun');
+    modal.querySelector('#admDelCancel').onclick = () => backdrop.remove();
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+    const validate = () => {
+      const okP = ph.value.trim() === 'EXCLUIR ESTA CONTA';
+      const okE = em.value.trim().toLowerCase() === user.email.trim().toLowerCase();
+      run.disabled = !(okP && okE && ck.checked);
+    };
+    [ph, em, ck].forEach(el => { el.addEventListener('change', validate); el.addEventListener('input', validate); });
+    run.onclick = async () => {
+      if (!confirm('⚠️ ÚLTIMA CHANCE: DESEJA REALMENTE EXCLUIR ' + user.email + ' E TODOS OS SEUS DADOS?')) return;
+      run.disabled = true;
+      const s = modal.querySelector('#admDelStatus');
+      s.style.display = 'block';
+      s.style.cssText = 'padding:10px 12px;border:1px solid rgba(59,130,246,0.3);background:rgba(59,130,246,0.08);border-radius:var(--radius-sm);font-size:0.88rem;';
+      s.textContent = 'Processando exclusão...';
+      try {
+        const c = window.SupabaseClient?.getClient?.();
+        if (!c) throw new Error('Cliente Supabase não inicializado.');
+        const { data, error } = await c.rpc('admin_delete_user_outro', { target_uid: user.id, confirm_email_in: user.email });
+        if (error) throw new Error(error.message || String(error));
+        if (typeof data !== 'string' || !data.startsWith('ok|')) throw new Error(String(data || 'Resposta RPC inválida.'));
+        AppController._adminInvalidateRoleCache();
+        AppController.showToast('✅ Conta excluída permanentemente: ' + user.email);
+        backdrop.remove();
+        await this._adminLoadUsersIntoTable(card);
+      } catch (e) {
+        s.style.cssText = 'padding:10px 12px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);border-radius:var(--radius-sm);font-size:0.88rem;color:#991b1b;';
+        s.innerHTML = '<strong>❌ Falha:</strong> ' + (e.message || String(e));
+        run.disabled = false;
+      }
+    };
   }
 
   static _adminRenderQueueList(panel) {
