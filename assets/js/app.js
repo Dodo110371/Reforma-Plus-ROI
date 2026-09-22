@@ -2202,7 +2202,7 @@ class AppController {
   static _adminRenderUserRows(tbody, list, ctx) {
     tbody.innerHTML = '';
     if (!list || list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="5" style="padding:1rem 1.2rem;color:var(--text-dim);text-align:center;">Nenhum usuário encontrado.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" style="padding:1rem 1.2rem;color:#475569;text-align:center;">Nenhum usuário encontrado.</td></tr>`;
       return;
     }
     const me = (ctx.myEmail || '').trim().toLowerCase();
@@ -2211,15 +2211,15 @@ class AppController {
       const isAdm = !!u.is_super_admin;
       const isMe = email.trim().toLowerCase() === me;
       const tr = document.createElement('tr');
-      tr.style.cssText = 'border-top:1px solid var(--border);';
+      tr.style.cssText = 'border-top:1px solid #e2e8f0;';
       const tdE = document.createElement('td');
-      tdE.style.cssText = 'padding:10px 12px;vertical-align:middle;word-break:break-all;font-weight:500;';
+      tdE.style.cssText = 'padding:10px 12px;vertical-align:middle;word-break:break-all;font-weight:500;color:#0f172a;';
       tdE.innerHTML = (isMe ? '<span style="color:#0369a1;font-weight:700;">👤 EU</span> · ' : '') + email;
       const tdC = document.createElement('td');
-      tdC.style.cssText = 'padding:10px 12px;vertical-align:middle;white-space:nowrap;font-size:0.82rem;color:var(--text-dim);';
+      tdC.style.cssText = 'padding:10px 12px;vertical-align:middle;white-space:nowrap;font-size:0.82rem;color:#475569;';
       tdC.textContent = u.created_at ? new Date(u.created_at).toLocaleString('pt-BR') : '—';
       const tdL = document.createElement('td');
-      tdL.style.cssText = 'padding:10px 12px;vertical-align:middle;white-space:nowrap;font-size:0.82rem;color:var(--text-dim);';
+      tdL.style.cssText = 'padding:10px 12px;vertical-align:middle;white-space:nowrap;font-size:0.82rem;color:#475569;';
       tdL.textContent = u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleString('pt-BR') : 'Nunca';
       const tdR = document.createElement('td');
       tdR.style.cssText = 'padding:10px 12px;vertical-align:middle;text-align:center;';
@@ -2260,7 +2260,7 @@ class AppController {
     const ctx = card._gestaoContext || {};
     const tbody = card.querySelector('#admUsersTbody');
     const status = card.querySelector('#admStatusMsg');
-    tbody.innerHTML = `<tr><td colspan="5" style="padding:1rem 1.2rem;color:var(--text-dim);text-align:center;">Carregando usuários do Supabase...</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="padding:1rem 1.2rem;color:#475569;text-align:center;">Carregando usuários do Supabase...</td></tr>`;
     status.style.display = 'none';
     try {
       const c = window.SupabaseClient?.getClient?.();
@@ -2288,7 +2288,7 @@ class AppController {
       this._adminFilterUsers(card);
     } catch (e) {
       status.style.display = 'block';
-      status.style.cssText = 'padding:12px 14px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);color:#991b1b;border-radius:var(--radius-sm);font-size:0.88rem;';
+      status.style.cssText = 'padding:12px 14px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);color:#991b1b;border-radius:10px;font-size:0.88rem;';
       status.innerHTML = '<strong>❌ Falha ao carregar usuários.</strong> Provavelmente a Migration 007 ainda não foi aplicada no SQL Editor Supabase. Erro: ' + (e.message || String(e));
       tbody.innerHTML = `<tr><td colspan="5" style="padding:1rem 1.2rem;color:#991b1b;text-align:center;">Erro: ${e.message || String(e)}</td></tr>`;
     }
@@ -2311,7 +2311,7 @@ class AppController {
       await this._adminLoadUsersIntoTable(card);
     } catch (e) {
       status.style.display = 'block';
-      status.style.cssText = 'padding:12px 14px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);color:#991b1b;border-radius:var(--radius-sm);font-size:0.88rem;';
+      status.style.cssText = 'padding:12px 14px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);color:#991b1b;border-radius:10px;font-size:0.88rem;';
       status.innerHTML = '<strong>❌ Falha ao alterar role:</strong> ' + (e.message || String(e));
     }
   }
