@@ -54,7 +54,7 @@
   }
 
   function _persistQueue() {
-    queue = queue.filter(op => !(op.synced && op.retries >= MAX_RETRIES));
+    queue = queue.filter(op => !op.synced);
     _safeWrite(LS_QUEUE, queue);
   }
 

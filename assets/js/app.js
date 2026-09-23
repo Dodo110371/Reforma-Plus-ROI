@@ -51,7 +51,15 @@ class AppController {
           } catch (err) { console.warn('[App] onChange auth handler error:', err); }
           try { AppController.updateAuthUI(); } catch (_) { }
           if (evt === 'SIGNED_IN') {
-            setTimeout(() => { try { SupabaseSync.processQueue(); } catch (_) { } }, 800);
+            setTimeout(async () => {
+              try {
+                if (window.SupabaseSync && typeof SupabaseSync.pullFromCloud === 'function') {
+                  await SupabaseSync.pullFromCloud();
+                }
+              } catch (_) { }
+              try { SupabaseSync.processQueue(); } catch (_) { }
+              try { window.location.reload(); } catch (_) { }
+            }, 1200);
           }
         });
       }
@@ -63,9 +71,16 @@ class AppController {
 
     try { this.handleDeepLink(); } catch (err) { console.warn('[App] handleDeepLink falhou:', err); }
 
-    setTimeout(() => {
-      try { if (AuthManager.isAuthenticated()) SupabaseSync.processQueue(); } catch (_) { }
-    }, 1500);
+    setTimeout(async () => {
+      try {
+        if (AuthManager.isAuthenticated && AuthManager.isAuthenticated()) {
+          if (window.SupabaseSync && typeof SupabaseSync.pullFromCloud === 'function') {
+            try { await SupabaseSync.pullFromCloud(); } catch (_) { }
+          }
+          try { SupabaseSync.processQueue(); } catch (_) { }
+        }
+      } catch (_) { }
+    }, 2500);
 
     try { this._adminCheckPendingSelfDelete(); } catch (err) { console.warn('[Admin] init check self delete falhou:', err); }
   }
@@ -1057,7 +1072,19 @@ class AppController {
         this.closeModalAuth();
         this.updateAuthUI();
         this.showToast('🔓 Autenticado com sucesso!');
-        setTimeout(() => SupabaseSync.processQueue(), 500);
+        setTimeout(async () => {
+          try {
+            if (window.SupabaseSync && typeof SupabaseSync.pullFromCloud === 'function') {
+              await SupabaseSync.pullFromCloud();
+            }
+          } catch (_) { }
+          try {
+            if (window.SupabaseSync && typeof SupabaseSync.processQueue === 'function') {
+              SupabaseSync.processQueue();
+            }
+          } catch (_) { }
+          try { window.location.reload(); } catch (_) { }
+        }, 800);
         return true;
       }
 
@@ -1139,7 +1166,19 @@ class AppController {
           this.showToast('✅ Conta criada e autenticada com sucesso!');
           this.closeModalAuth();
           this.updateAuthUI();
-          setTimeout(() => SupabaseSync.processQueue(), 500);
+          setTimeout(async () => {
+            try {
+              if (window.SupabaseSync && typeof SupabaseSync.pullFromCloud === 'function') {
+                await SupabaseSync.pullFromCloud();
+              }
+            } catch (_) { }
+            try {
+              if (window.SupabaseSync && typeof SupabaseSync.processQueue === 'function') {
+                SupabaseSync.processQueue();
+              }
+            } catch (_) { }
+            try { window.location.reload(); } catch (_) { }
+          }, 800);
           return true;
         }
 
@@ -1196,7 +1235,15 @@ class AppController {
           this.closeModalAuth();
           this.updateAuthUI();
           this.showToast('🔓 Autenticado como Administrador com sucesso!');
-          setTimeout(() => SupabaseSync.processQueue(), 500);
+          setTimeout(async () => {
+            try {
+              if (window.SupabaseSync && typeof SupabaseSync.pullFromCloud === 'function') {
+                await SupabaseSync.pullFromCloud();
+              }
+            } catch (_) { }
+            try { SupabaseSync.processQueue(); } catch (_) { }
+            try { window.location.reload(); } catch (_) { }
+          }, 800);
           return true;
         } else {
           if (errorEl) { errorEl.textContent = '❌ Senha incorreta! Tente novamente.'; errorEl.style.display = 'block'; }
@@ -1279,7 +1326,15 @@ class AppController {
         this.closeModalAuth();
         this.updateAuthUI();
         this.showToast('🔓 Autenticado na nuvem com sucesso!');
-        setTimeout(() => SupabaseSync.processQueue(), 500);
+        setTimeout(async () => {
+          try {
+            if (window.SupabaseSync && typeof SupabaseSync.pullFromCloud === 'function') {
+              await SupabaseSync.pullFromCloud();
+            }
+          } catch (_) { }
+          try { SupabaseSync.processQueue(); } catch (_) { }
+          try { window.location.reload(); } catch (_) { }
+        }, 800);
       } else {
         const pinInput = document.getElementById('authPinInput');
         const pinValue = pinInput?.value || '';
@@ -1287,7 +1342,15 @@ class AppController {
           this.closeModalAuth();
           this.updateAuthUI();
           this.showToast('🔓 Autenticado como Administrador com sucesso!');
-          setTimeout(() => SupabaseSync.processQueue(), 500);
+          setTimeout(async () => {
+            try {
+              if (window.SupabaseSync && typeof SupabaseSync.pullFromCloud === 'function') {
+                await SupabaseSync.pullFromCloud();
+              }
+            } catch (_) { }
+            try { SupabaseSync.processQueue(); } catch (_) { }
+            try { window.location.reload(); } catch (_) { }
+          }, 800);
         } else {
           if (errorMsg) { errorMsg.textContent = '❌ Senha incorreta! Tente novamente.'; errorMsg.style.display = 'block'; }
         }
