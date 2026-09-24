@@ -7,22 +7,51 @@ const SUPER_ADMIN_EMAILS = [];
 
 let deferredInstallPrompt = null;
 (function _installPwaListenersOnce() {
+  function _callApp(method, arg1) {
+    const fn = () => {
+      try {
+        if (window.AppController && typeof window.AppController[method] === 'function') {
+          window.AppController[method](arg1);
+          return true;
+        }
+        // fallback 1: try direct global class reference
+        if (typeof AppController !== 'undefined' && typeof AppController[method] === 'function') {
+          AppController[method](arg1);
+          return true;
+        }
+      } catch (_) { }
+      return false;
+    };
+    if (fn()) return;
+    // fallback 2: wait for class/DOM definition (polling até 8s)
+    let tries = 0;
+    const t = setInterval(() => {
+      tries++;
+      if (fn() || tries > 160) {
+        clearInterval(t);
+      }
+    }, 50);
+  }
   try {
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredInstallPrompt = e;
       try { localStorage.removeItem('reformaplus_pwa_installed'); } catch (_) { }
-      try { AppController._refreshInstallButton(); } catch (_) { }
+      _callApp('_refreshInstallButton');
     });
   } catch (_) { }
   try {
     window.addEventListener('appinstalled', () => {
       try { localStorage.setItem('reformaplus_pwa_installed', 'true'); } catch (_) { }
       deferredInstallPrompt = null;
-      try { AppController.showToast('✅ ReformaPlus instalado! Abra o aplicativo na tela inicial.', 'success', 10000); } catch (_) { }
-      try { AppController._refreshInstallButton(); } catch (_) { }
+      try {
+        _callApp('showToast', '✅ ReformaPlus instalado! Abra o aplicativo na tela inicial.', 'success', 10000);
+      } catch (_) { }
+      _callApp('_refreshInstallButton');
     });
   } catch (_) { }
+  // Expõe método utilitário para uso em polling posterior (safe)
+  window.__reformaplus_callAppMethod = _callApp;
 })();
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1590,12 +1619,18 @@ class AppController {
 
   static openMobileDrawer() {
     const backdrop = document.getElementById('drawerBackdrop');
-    if (backdrop) backdrop.classList.add('active');
+    if (!backdrop) return;
+    backdrop.classList.add('active');
+    try { document.body.style.overflow = 'hidden'; } catch (_) { }
+    try { document.documentElement.style.overflow = 'hidden'; } catch (_) { }
   }
 
   static closeMobileDrawer() {
     const backdrop = document.getElementById('drawerBackdrop');
-    if (backdrop) backdrop.classList.remove('active');
+    if (!backdrop) return;
+    backdrop.classList.remove('active');
+    try { document.body.style.overflow = ''; } catch (_) { }
+    try { document.documentElement.style.overflow = ''; } catch (_) { }
   }
 
   static goHome() {

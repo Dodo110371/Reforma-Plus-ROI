@@ -956,7 +956,8 @@
     <!-- ====== LINHA 1: Marca + Status Global ====== -->
     <div class="header-topline">
       <div class="header-left" style="flex: 1 1 auto;">
-        <div class="brand-container" style="cursor:pointer;" onclick="AppController.goHome()" title="Voltar para o início">
+        <div class="brand-container" style="cursor:pointer;" onclick="AppController.goHome()"
+          title="Voltar para o início">
           <div class="brand-logo">
             <img src="./assets/icons/icon-192.png" alt="Logo ReformaPlus">
           </div>
@@ -993,15 +994,18 @@
         <select id="propertySelector" class="form-input no-print"
           style="min-width: 230px; max-width: 380px; height: 36px; padding: 0 0.75rem; background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border); border-radius: 10px; font-size: 0.9rem; font-weight: 500;">
         </select>
-        <button id="btnNewPropertyHeader" class="btn btn-gold btn-sm no-print btn-header-text" title="Cadastrar novo imóvel">
+        <button id="btnNewPropertyHeader" class="btn btn-gold btn-sm no-print btn-header-text"
+          title="Cadastrar novo imóvel">
           ➕ <span>Novo Imóvel</span>
         </button>
       </div>
       <div class="header-right" style="gap: 0.4rem;">
-        <button id="btnExportCSV" class="btn btn-outline btn-sm btn-header-text desktop-only no-print" title="Exportar dados do imóvel atual para planilha CSV">
+        <button id="btnExportCSV" class="btn btn-outline btn-sm btn-header-text desktop-only no-print"
+          title="Exportar dados do imóvel atual para planilha CSV">
           📊 <span>Exportar CSV</span>
         </button>
-        <button id="btnPrintReport" class="btn btn-outline btn-sm btn-header-text desktop-only no-print" title="Gerar relatório em PDF / Imprimir">
+        <button id="btnPrintReport" class="btn btn-outline btn-sm btn-header-text desktop-only no-print"
+          title="Gerar relatório em PDF / Imprimir">
           🖨️ <span>PDF</span>
         </button>
         <button id="btnAuthToggle" class="btn btn-outline btn-sm no-print" title="Acesso Administrador">
@@ -1013,120 +1017,122 @@
 
   <!-- Gaveta Lateral de Navegação (Mobile Slide Drawer) -->
   <div id="drawerBackdrop" class="drawer-backdrop no-print">
-    <div class="drawer-panel">
-      <div class="drawer-header">
-        <div class="brand-container">
-          <div class="brand-logo drawer-logo">
-            <img src="./assets/icons/icon-192.png" alt="Logo RP ROI">
+    <div class="drawer-scene" aria-hidden="true">
+      <div class="drawer-panel" role="dialog" aria-modal="true" aria-label="Menu principal">
+        <div class="drawer-header">
+          <div class="brand-container">
+            <div class="brand-logo drawer-logo">
+              <img src="./assets/icons/icon-192.png" alt="Logo RP ROI">
+            </div>
+            <div class="drawer-brand-text">
+              <h3>ReformaPlus</h3>
+              <span class="drawer-subtitle">Gestão de Obras & ROI</span>
+              <span id="drawerSessionBadge" class="badge drawer-session-badge badge-pendente">🔒 Visitante</span>
+            </div>
           </div>
-          <div class="drawer-brand-text">
-            <h3>ReformaPlus</h3>
-            <span class="drawer-subtitle">Gestão de Obras & ROI</span>
-            <span id="drawerSessionBadge" class="badge drawer-session-badge badge-pendente">🔒 Visitante</span>
+          <button id="btnCloseDrawer" class="drawer-close-btn" title="Fechar Menu" aria-label="Fechar menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <div class="drawer-body">
+          <div class="drawer-section-label">
+            <span>Navegação</span>
           </div>
-        </div>
-        <button id="btnCloseDrawer" class="drawer-close-btn" title="Fechar Menu" aria-label="Fechar menu">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-            stroke-linecap="round" stroke-linejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
-      </div>
+          <nav class="drawer-nav">
+            <button class="drawer-nav-item active" data-tab="home">
+              <span class="drawer-nav-icon">🏠</span>
+              <div class="drawer-nav-text">
+                <strong>Início</strong>
+                <small>Apresentação & CTAs</small>
+              </div>
+            </button>
+            <button class="drawer-nav-item" data-tab="dashboard">
+              <span class="drawer-nav-icon">📊</span>
+              <div class="drawer-nav-text">
+                <strong>Dashboard ROI</strong>
+                <small>Métricas e gráficos</small>
+              </div>
+            </button>
+            <button class="drawer-nav-item" data-tab="imovels">
+              <span class="drawer-nav-icon">🏘️</span>
+              <div class="drawer-nav-text">
+                <strong>Imóveis</strong>
+                <small>Gerenciar múltiplos imóveis</small>
+              </div>
+            </button>
+            <button class="drawer-nav-item" data-tab="despesas">
+              <span class="drawer-nav-icon">📝</span>
+              <div class="drawer-nav-text">
+                <strong>Lançamentos</strong>
+                <small>Despesas, custos & recibos</small>
+              </div>
+            </button>
+            <button class="drawer-nav-item" data-tab="etapas">
+              <span class="drawer-nav-icon">🧱</span>
+              <div class="drawer-nav-text">
+                <strong>Etapas da Obra</strong>
+                <small>Progresso físico-financeiro</small>
+              </div>
+            </button>
+            <button class="drawer-nav-item" data-tab="relatorios">
+              <span class="drawer-nav-icon">📄</span>
+              <div class="drawer-nav-text">
+                <strong>Relatório Completo</strong>
+                <small>Prestação de contas</small>
+              </div>
+            </button>
+            <button class="drawer-nav-item" data-tab="configuracoes">
+              <span class="drawer-nav-icon">⚙️</span>
+              <div class="drawer-nav-text">
+                <strong>Imóvel & Dados</strong>
+                <small>Configurações e backup</small>
+              </div>
+            </button>
+            <button class="drawer-nav-item" data-tab="sobre">
+              <span class="drawer-nav-icon">ℹ️</span>
+              <div class="drawer-nav-text">
+                <strong>Sobre</strong>
+                <small>Objetivos, termos e privacidade</small>
+              </div>
+            </button>
+          </nav>
 
-      <div class="drawer-body">
-        <div class="drawer-section-label">
-          <span>Navegação</span>
-        </div>
-        <nav class="drawer-nav">
-          <button class="drawer-nav-item active" data-tab="home">
-            <span class="drawer-nav-icon">🏠</span>
-            <div class="drawer-nav-text">
-              <strong>Início</strong>
-              <small>Apresentação & CTAs</small>
-            </div>
-          </button>
-          <button class="drawer-nav-item" data-tab="dashboard">
-            <span class="drawer-nav-icon">📊</span>
-            <div class="drawer-nav-text">
-              <strong>Dashboard ROI</strong>
-              <small>Métricas e gráficos</small>
-            </div>
-          </button>
-          <button class="drawer-nav-item" data-tab="imovels">
-            <span class="drawer-nav-icon">🏘️</span>
-            <div class="drawer-nav-text">
-              <strong>Imóveis</strong>
-              <small>Gerenciar múltiplos imóveis</small>
-            </div>
-          </button>
-          <button class="drawer-nav-item" data-tab="despesas">
-            <span class="drawer-nav-icon">📝</span>
-            <div class="drawer-nav-text">
-              <strong>Lançamentos</strong>
-              <small>Despesas, custos & recibos</small>
-            </div>
-          </button>
-          <button class="drawer-nav-item" data-tab="etapas">
-            <span class="drawer-nav-icon">🧱</span>
-            <div class="drawer-nav-text">
-              <strong>Etapas da Obra</strong>
-              <small>Progresso físico-financeiro</small>
-            </div>
-          </button>
-          <button class="drawer-nav-item" data-tab="relatorios">
-            <span class="drawer-nav-icon">📄</span>
-            <div class="drawer-nav-text">
-              <strong>Relatório Completo</strong>
-              <small>Prestação de contas</small>
-            </div>
-          </button>
-          <button class="drawer-nav-item" data-tab="configuracoes">
-            <span class="drawer-nav-icon">⚙️</span>
-            <div class="drawer-nav-text">
-              <strong>Imóvel & Dados</strong>
-              <small>Configurações e backup</small>
-            </div>
-          </button>
-          <button class="drawer-nav-item" data-tab="sobre">
-            <span class="drawer-nav-icon">ℹ️</span>
-            <div class="drawer-nav-text">
-              <strong>Sobre</strong>
-              <small>Objetivos, termos e privacidade</small>
-            </div>
-          </button>
-        </nav>
-
-        <div class="drawer-section-label">
-          <span>Ações Rápidas</span>
-        </div>
-        <div class="drawer-actions">
-          <button id="btnDrawerAuthToggle" class="drawer-action-btn drawer-action-auth">
-            <span class="drawer-action-icon">🔑</span>
-            <span>Entrar como Admin</span>
-          </button>
-          <button id="btnDrawerExportCSV" class="drawer-action-btn">
-            <span class="drawer-action-icon">📊</span>
-            <span>Exportar Planilha CSV</span>
-          </button>
-          <button id="btnDrawerPrintReport" class="drawer-action-btn">
-            <span class="drawer-action-icon">🖨️</span>
-            <span>Gerar PDF / Imprimir</span>
-          </button>
-        </div>
-      </div>
-
-      <div class="drawer-footer">
-        <div class="drawer-footer-brand">
-          <div class="drawer-footer-logo">RP</div>
-          <div>
-            <strong>ReformaPlus ROI</strong>
-            <small>v1.0 · Funciona Offline</small>
+          <div class="drawer-section-label">
+            <span>Ações Rápidas</span>
+          </div>
+          <div class="drawer-actions">
+            <button id="btnDrawerAuthToggle" class="drawer-action-btn drawer-action-auth">
+              <span class="drawer-action-icon">🔑</span>
+              <span>Entrar como Admin</span>
+            </button>
+            <button id="btnDrawerExportCSV" class="drawer-action-btn">
+              <span class="drawer-action-icon">📊</span>
+              <span>Exportar Planilha CSV</span>
+            </button>
+            <button id="btnDrawerPrintReport" class="drawer-action-btn">
+              <span class="drawer-action-icon">🖨️</span>
+              <span>Gerar PDF / Imprimir</span>
+            </button>
           </div>
         </div>
-      </div>
-    </div>
-  </div>
+
+        <div class="drawer-footer">
+          <div class="drawer-footer-brand">
+            <div class="drawer-footer-logo">RP</div>
+            <div>
+              <strong>ReformaPlus ROI</strong>
+              <small>v1.0 · Funciona Offline</small>
+            </div>
+          </div>
+        </div>
+      </div><!-- /.drawer-panel -->
+    </div><!-- /.drawer-scene -->
+  </div><!-- /#drawerBackdrop -->
 
   <!-- Container Principal -->
   <main class="app-container">
