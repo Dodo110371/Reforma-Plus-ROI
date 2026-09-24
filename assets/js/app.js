@@ -62,25 +62,37 @@ document.addEventListener('DOMContentLoaded', () => {
 class AppController {
   static currentExpenseIdToEdit = null;
   static currentReceiptPreviewUrl = null;
+  static _bootErrors = [];
+
+  static _registerGlobalErrorGuards() {
+    try {
+      window.addEventListener('error', (ev) => {
+        try {
+          const msg = String(ev?.message || ev?.error?.message || '').slice(0, 140);
+          console.error('[App][GlobalError]', ev?.error || ev?.message || ev);
+          this._bootErrors.push('UI_ERR: ' + msg);
+        } catch (_) { }
+      });
+      window.addEventListener('unhandledrejection', (ev) => {
+        try {
+          const r = (ev && typeof ev.reason !== 'undefined') ? String(ev.reason).slice(0, 140) : '';
+          console.warn('[App][UnhandledPromise]', ev?.reason || ev);
+          this._bootErrors.push('ASYNC_ERR: ' + r);
+        } catch (_) { }
+      });
+    } catch (_) { }
+  }
 
   static init() {
-    try {
-      this._setupMobileProauthViewport();
-    } catch (err) { console.warn('[App] setup mobile viewport falhou:', err); }
+    this._registerGlobalErrorGuards();
 
-    try {
-      StorageManager.initStorage();
-    } catch (err) {
-      console.error('[App] Erro em StorageManager.initStorage (continuando mesmo assim):', err);
-    }
-    try {
-      AuthManager.initAuth();
-    } catch (err) {
-      console.error('[App] Erro em AuthManager.initAuth (continuando mesmo assim):', err);
-    }
+    try { this._setupMobileProauthViewport(); } catch (err) { console.warn('[App][1/8] viewport falhou:', err); this._bootErrors.push('viewport:' + String(err.message || err).slice(0, 80)); }
+    try { StorageManager.initStorage(); } catch (err) { console.error('[App][2/8] StorageManager.initStorage (continuando):', err); this._bootErrors.push('StorageInit:' + String(err.message || err).slice(0, 80)); }
+    try { AuthManager.initAuth(); } catch (err) { console.error('[App][3/8] AuthManager.initAuth (continuando):', err); this._bootErrors.push('AuthInit:' + String(err.message || err).slice(0, 80)); }
+    try { AppController.applySavedTheme(); } catch (err) { console.warn('[App][4/8] tema falhou:', err); this._bootErrors.push('Theme:' + String(err.message || err).slice(0, 80)); }
 
-    try { AppController.applySavedTheme(); } catch (err) { console.warn(err); }
-
+    // Listener onChange Auth (SIGNED_IN/SIGNED_OUT) com protecao anti-loop reload
+    let pullQueueRanThisSession = false;
     try {
       if (window.SupabaseClient?.auth?.onChange) {
         window.SupabaseClient.auth.onChange((evt, session) => {
@@ -88,48 +100,69 @@ class AppController {
             if (evt === 'SIGNED_IN' && session?.user) {
               try { sessionStorage.setItem('reformaplus_is_authenticated', 'true'); } catch (_) { }
               const userId = session.user.id;
-              const existingProp = StorageManager.getPropertyInfo();
-              if (existingProp && (!existingProp.user_id || existingProp.user_id === 'local-user-admin')) {
-                StorageManager.savePropertyInfo({ user_id: userId }, true);
-              }
+              try {
+                const existingProp = StorageManager.getPropertyInfo();
+                if (existingProp && (!existingProp.user_id || existingProp.user_id === 'local-user-admin')) {
+                  StorageManager.savePropertyInfo({ user_id: userId }, true);
+                }
+              } catch (err) { console.warn('[App] savePropertyInfo falhou:', err); }
             } else if (evt === 'SIGNED_OUT') {
               try { sessionStorage.setItem('reformaplus_is_authenticated', 'false'); } catch (_) { }
+              try { sessionStorage.removeItem('reformaplus_sync_ran_once'); } catch (_) { }
+              pullQueueRanThisSession = false;
             }
           } catch (err) { console.warn('[App] onChange auth handler error:', err); }
+
           try { AppController.updateAuthUI(); } catch (_) { }
-          if (evt === 'SIGNED_IN') {
+
+          if (evt === 'SIGNED_IN' && !pullQueueRanThisSession) {
+            pullQueueRanThisSession = true;
             setTimeout(async () => {
               try {
-                if (window.SupabaseSync && typeof SupabaseSync.pullFromCloud === 'function') {
-                  await SupabaseSync.pullFromCloud();
+                if (!sessionStorage.getItem('reformaplus_sync_ran_once')) {
+                  sessionStorage.setItem('reformaplus_sync_ran_once', '1');
+                  if (window.SupabaseSync && typeof SupabaseSync.pullFromCloud === 'function') {
+                    try { await SupabaseSync.pullFromCloud(); } catch (e) { console.warn('[App] pullFromCloud:', e); }
+                  }
+                  try { if (window.SupabaseSync) SupabaseSync.processQueue(); } catch (_) { }
+                  try { AppController.renderAllViews(); } catch (_) { }
                 }
-              } catch (_) { }
-              try { SupabaseSync.processQueue(); } catch (_) { }
-              try { window.location.reload(); } catch (_) { }
-            }, 1200);
+              } catch (e) { console.warn('[App] signedIn pipeline error:', e); }
+            }, 1400);
           }
         });
       }
-    } catch (err) { console.warn('[App] auth onChange listener não acoplado:', err); }
+    } catch (err) { console.warn('[App][5/8] auth onChange listener nao acoplado:', err); this._bootErrors.push('AuthOnChange:' + String(err.message || err).slice(0, 80)); }
 
-    try { this.registerServiceWorker(); } catch (err) { console.warn(err); }
-    try { this.bindEvents(); } catch (err) { console.error('[App] ERRO CRÍTICO em bindEvents:', err); }
-    try { this.renderAllViews(); } catch (err) { console.error('[App] ERRO em renderAllViews (bindEvents já rodou):', err); }
+    try { this.registerServiceWorker(); } catch (err) { console.warn('[App][6/8] registerServiceWorker:', err); this._bootErrors.push('SW:' + String(err.message || err).slice(0, 80)); }
+    try { this.bindEvents(); } catch (err) { console.error('[App][7/8] ERRO CRITICO bindEvents (travamento botões!):', err); this._bootErrors.push('bindEvents:' + String(err.message || err).slice(0, 100)); try { AppController.showToast('⚠️ Atenção: navegação não inicializada completamente. Recarregue a página (Ctrl+Shift+R).', 'error', 9000); } catch (_) { } }
+    try { this.renderAllViews(); } catch (err) { console.error('[App][8/8] renderAllViews:', err); this._bootErrors.push('renderAll:' + String(err.message || err).slice(0, 100)); }
 
-    try { this.handleDeepLink(); } catch (err) { console.warn('[App] handleDeepLink falhou:', err); }
+    try { this.handleDeepLink(); } catch (err) { console.warn('[App] handleDeepLink:', err); }
 
+    // Boot sync apos 2.5s (apenas se flag nao setada)
     setTimeout(async () => {
       try {
-        if (AuthManager.isAuthenticated && AuthManager.isAuthenticated()) {
+        if (!sessionStorage.getItem('reformaplus_sync_ran_once') && AuthManager.isAuthenticated && AuthManager.isAuthenticated()) {
+          sessionStorage.setItem('reformaplus_sync_ran_once', '1');
           if (window.SupabaseSync && typeof SupabaseSync.pullFromCloud === 'function') {
             try { await SupabaseSync.pullFromCloud(); } catch (_) { }
           }
-          try { SupabaseSync.processQueue(); } catch (_) { }
+          try { if (window.SupabaseSync) SupabaseSync.processQueue(); } catch (_) { }
+          try { AppController.renderAllViews(); } catch (_) { }
         }
       } catch (_) { }
-    }, 2500);
+    }, 2600);
 
-    try { this._adminCheckPendingSelfDelete(); } catch (err) { console.warn('[Admin] init check self delete falhou:', err); }
+    try { this._adminCheckPendingSelfDelete(); } catch (err) { console.warn('[Admin] init self delete:', err); }
+
+    // Debug: se houver erros no boot, avisa no console
+    if (this._bootErrors.length > 0) {
+      console.groupCollapsed('[App] ⚠️ Resumo erros BOOT (' + this._bootErrors.length + ')');
+      this._bootErrors.forEach(e => console.warn(' · ' + e));
+      console.groupEnd();
+    }
+    console.info('[App] ✅ Boot concluído. bindEvents OK. Botões prontos.');
   }
 
   /**
