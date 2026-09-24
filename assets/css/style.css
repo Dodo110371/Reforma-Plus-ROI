@@ -146,7 +146,7 @@ body {
   padding: 0;
   margin: -1px;
   overflow: hidden;
-  clip: rect(0,0,0,0);
+  clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
 }
@@ -830,34 +830,37 @@ body {
    Navegação Mobile Sanduíche & Slide Drawer (Gaveta Lateral Premium)
    ========================================================================== */
 
-/* MOBILE-FIRST: abaixo de 992px → menu sanduíche + drawer */
+/* Todos tamanhos de tela: MENU HAMBURGUER sempre visível (botão ☰) */
 .mobile-menu-btn {
-  display: inline-flex;
+  display: inline-flex !important;
   align-items: center;
   justify-content: center;
-  font-size: 1.35rem;
+  font-size: 1.45rem;
   line-height: 1;
-  padding: 0.55rem;
+  padding: 0.55rem 0.65rem;
   order: 99;
+  border-radius: 12px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: var(--text-primary);
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
 
+.mobile-menu-btn:hover {
+  transform: translateY(-1px) rotate(-2deg);
+  background: rgba(16, 185, 129, 0.14);
+  box-shadow: 0 6px 18px rgba(16, 185, 129, 0.22);
+}
+
+/* 🔥 REMOVIDO: Abas horizontais desktop. TUDO entra no menu hambúrguer lateral (drawer) */
 .desktop-only {
   display: none !important;
 }
 
-/* DESKTOP: 992px ou mais → navegação horizontal fixa */
-@media (min-width: 992px) {
-  .mobile-menu-btn {
-    display: none !important;
-  }
-
-  .desktop-only {
-    display: inline-flex !important;
-  }
-
-  nav.app-nav.desktop-only {
-    display: flex !important;
-  }
+nav.app-nav.desktop-only,
+.app-nav.desktop-only {
+  display: none !important;
 }
 
 /* Ajustes do header para mobile */
@@ -951,7 +954,7 @@ body {
   pointer-events: auto;
 }
 
-/* =============== PAINEL DA GAVETA LATERAL =============== */
+/* =============== PAINEL DA GAVETA LATERAL (3D + SUAVE) =============== */
 .drawer-panel {
   position: absolute;
   top: 0;
@@ -960,24 +963,34 @@ body {
   max-width: 88vw;
   height: 100%;
   max-height: 100vh;
-  background: linear-gradient(160deg, rgba(17, 24, 39, 0.92) 0%, rgba(15, 23, 42, 0.95) 100%);
-  backdrop-filter: blur(28px) saturate(200%);
-  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  background: linear-gradient(160deg, rgba(17, 24, 39, 0.90) 0%, rgba(15, 23, 42, 0.94) 100%);
+  backdrop-filter: blur(30px) saturate(210%);
+  -webkit-backdrop-filter: blur(30px) saturate(210%);
   border-left: 1px solid rgba(16, 185, 129, 0.2);
-  box-shadow: -24px 0 60px -12px rgba(0, 0, 0, 0.75),
-    0 0 80px -20px rgba(16, 185, 129, 0.12);
+  box-shadow:
+    -32px 0 90px -12px rgba(0, 0, 0, 0.82),
+    0 0 120px -24px rgba(16, 185, 129, 0.18),
+    inset -1px 0 0 rgba(255, 255, 255, 0.04);
   display: flex;
   flex-direction: column;
-  transform: translateX(100%);
-  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: transform;
-  border-radius: 20px 0 0 20px;
+  transform: perspective(1400px) translateX(100%) translateZ(60px) rotateY(-18deg);
+  transform-origin: right center;
+  transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.42s ease;
+  opacity: 0.7;
+  will-change: transform, opacity;
+  border-radius: 22px 0 0 22px;
   overflow: hidden;
 }
 
 [data-theme="light"] .drawer-panel {
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.94) 0%, rgba(248, 250, 252, 0.96) 100%);
-  border-left: 1px solid rgba(16, 185, 129, 0.25);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.86) 0%, rgba(248, 250, 252, 0.92) 100%);
+  border-left: 1px solid rgba(16, 185, 129, 0.3);
+  box-shadow:
+    -32px 0 90px -12px rgba(15, 23, 42, 0.26),
+    0 0 120px -24px rgba(16, 185, 129, 0.18),
+    inset -1px 0 0 rgba(15, 23, 42, 0.06);
 }
 
 /* Animação escalonada de entrada dos itens */
@@ -1056,7 +1069,12 @@ body {
 }
 
 .drawer-backdrop.active .drawer-panel {
-  transform: translateX(0);
+  transform: perspective(1400px) translateX(0) translateZ(0) rotateY(0);
+  opacity: 1;
+  box-shadow:
+    -32px 0 110px -6px rgba(0, 0, 0, 0.88),
+    0 0 140px -18px rgba(16, 185, 129, 0.22),
+    inset -1px 0 0 rgba(255, 255, 255, 0.05);
 }
 
 /* =============== HEADER DA GAVETA =============== */
@@ -1216,9 +1234,12 @@ body {
 }
 
 .drawer-nav-item:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.05);
   color: var(--text-main);
-  transform: translateX(2px);
+  transform: translateX(3px) translateY(-1px);
+  box-shadow: 0 10px 24px -10px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(16, 185, 129, 0.18);
+  border-color: rgba(16, 185, 129, 0.25);
 }
 
 .drawer-nav-item:active {

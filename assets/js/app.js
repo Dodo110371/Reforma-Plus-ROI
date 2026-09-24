@@ -3,9 +3,27 @@
  * ReformaPlus ROI - PWA
  */
 
-const SUPER_ADMIN_EMAILS = [
-  'rosanacas1975@gmail.com',
-];
+const SUPER_ADMIN_EMAILS = [];
+
+let deferredInstallPrompt = null;
+(function _installPwaListenersOnce() {
+  try {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      try { localStorage.removeItem('reformaplus_pwa_installed'); } catch (_) { }
+      try { AppController._refreshInstallButton(); } catch (_) { }
+    });
+  } catch (_) { }
+  try {
+    window.addEventListener('appinstalled', () => {
+      try { localStorage.setItem('reformaplus_pwa_installed', 'true'); } catch (_) { }
+      deferredInstallPrompt = null;
+      try { AppController.showToast('✅ ReformaPlus instalado! Abra o aplicativo na tela inicial.', 'success', 10000); } catch (_) { }
+      try { AppController._refreshInstallButton(); } catch (_) { }
+    });
+  } catch (_) { }
+})();
 
 document.addEventListener('DOMContentLoaded', () => {
   // Inicializa a aplicação
@@ -215,10 +233,18 @@ class AppController {
     const btn = document.getElementById('btnInstallPWA');
     if (!btn) return;
 
+    // CASO 1: App já está instalado (standalone PWA) — some o botão PERMANENTEMENTE
     if (AppController._isStandaloneMode()) {
       btn.style.display = 'none';
       return;
     }
+    // CASO 2: Flag localStorage (evento 'appinstalled' disparou ou instalado anteriormente) — some o botão
+    try {
+      if (localStorage.getItem('reformaplus_pwa_installed') === 'true') {
+        btn.style.display = 'none';
+        return;
+      }
+    } catch (_) { }
 
     if (!btn.dataset.pwaInstallHandler) {
       btn.dataset.pwaInstallHandler = '1';
@@ -234,17 +260,20 @@ class AppController {
       btn.disabled = false;
       btn.style.opacity = '1';
       btn.style.cursor = 'pointer';
-      btn.innerHTML = '📲 Instalar App';
-      btn.title = 'Instalar ReformaPlus como aplicativo.';
+      btn.innerHTML = '📲 <span>Instalar App</span>';
+      btn.title = 'Instalar ReformaPlus como aplicativo (funciona offline).';
       return;
     }
 
+    // CASO 3: Evento beforeinstallprompt ainda não disparou.
+    // Botão fica visível porém neutro. Não mostra mais texto "indisponível" (horrível UX).
+    // Mostra "📲 Instalar App" porem disabled (aguarda navegador liberar).
     btn.style.display = 'inline-flex';
     btn.disabled = true;
-    btn.style.opacity = '0.7';
+    btn.style.opacity = '0.72';
     btn.style.cursor = 'not-allowed';
-    btn.innerHTML = '⚠️ Instalação indisponível';
-    btn.title = 'Instalação PWA não disponível no navegador atual ou ainda não liberada.';
+    btn.innerHTML = '📲 <span>Aguardando instalação…</span>';
+    btn.title = 'Navegador ainda não liberou a instalação. Tente novamente após 1-2 segundos ou acesse Menu ⋮ do Chrome → "Instalar aplicativo".';
   }
 
   static async _handleInstallClick() {
@@ -1957,16 +1986,25 @@ class AppController {
 
   static async isCurrentUserSuperAdmin() {
     try {
-      const email = AuthManager.getCurrentUserEmail() || '';
-      const norm = email.trim().toLowerCase();
-      // Caso 1: autenticação local (PIN) SEM email = Admin (compatibilidade legacy)
-      if (AuthManager.isAuthenticated() && !AuthManager._hasSupabaseSessionSync() && !norm) {
+      // [REGRA 1] Admin local (PIN) — SÓ concede se NÃO há sessão cloud e o user_id é literal "local-user-admin"
+      // (Evita que usuário cloud com cache temporariamente vazio ganhe Admin por engano).
+      const hasCloud = !!(AuthManager._hasSupabaseSessionSync && AuthManager._hasSupabaseSessionSync());
+      const uid = AuthManager.getCurrentUserId ? AuthManager.getCurrentUserId() : null;
+      const isPurePinAdmin = !hasCloud && uid === 'local-user-admin';
+      if (isPurePinAdmin && AuthManager.isAuthenticated && AuthManager.isAuthenticated()) {
         return true;
       }
-      if (!norm) return false;
-      // Caso 2: Fallback hardcoded (rosanacas1975@gmail.com etc)
-      if (SUPER_ADMIN_EMAILS.some(e => e.trim().toLowerCase() === norm)) return true;
 
+      const email = AuthManager.getCurrentUserEmail ? (AuthManager.getCurrentUserEmail() || '') : '';
+      const norm = email.trim().toLowerCase();
+      if (!norm) return false;
+
+      // [REGRA 2] Fallback array hardcoded (geralmente VAZIO). Mantido para emergência.
+      if (Array.isArray(SUPER_ADMIN_EMAILS) && SUPER_ADMIN_EMAILS.some(e => (e || '').trim().toLowerCase() === norm)) {
+        return true;
+      }
+
+      // [REGRA 3] FONTE ÚNICA DE VERDADE: app_config.super_admin_emails via RPC admin_get_super_admin_emails
       try {
         const c = window.SupabaseClient?.getClient?.();
         if (c) {
@@ -1980,9 +2018,13 @@ class AppController {
             if (!error && Array.isArray(data)) {
               list = data.map(e => String(e || '').trim().toLowerCase()).filter(Boolean);
               localStorage.setItem(this._ADMIN_ROLE_CACHE_KEY, JSON.stringify({ ts: Date.now(), list }));
+            } else if (error && String(error.message || '').includes('Acesso negado')) {
+              // NÃO É Admin. Cache vazio previne RPC excesso.
+              localStorage.setItem(this._ADMIN_ROLE_CACHE_KEY, JSON.stringify({ ts: Date.now(), list: [] }));
+              list = [];
             }
           }
-          if (list && Array.isArray(list) && list.includes(norm)) return true;
+          if (Array.isArray(list) && list.includes(norm)) return true;
         }
       } catch (_) { }
       return false;
